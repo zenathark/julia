@@ -1699,6 +1699,7 @@ typedef struct {
     const char *outputbc;
     const char *outputo;
     const char *outputji;
+    const char *mcpu;
     int8_t incremental;
     int8_t image_file_specified;
 } jl_options_t;
