@@ -279,11 +279,12 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t **pli, size_t world, int forc
 
 int jl_is_rettype_inferred(jl_method_instance_t *li)
 {
-    if (!li->inferred)
+    jl_value_t *code = li->inferred;
+    if (!code)
         return 0;
-    if (jl_is_code_info(li->inferred) && !((jl_code_info_t*)li->inferred)->inferred)
-        return 0;
-    return 1;
+    if (code == jl_nothing || jl_ast_flag_inferred((jl_array_t*)code))
+        return 1;
+    return 0;
 }
 
 struct set_world {
