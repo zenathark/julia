@@ -180,7 +180,6 @@ extern JITEventListener *CreateJuliaJITEventListener();
 bool imaging_mode = false;
 
 Module *shadow_output;
-std::vector<std::tuple<jl_method_instance_t *, jl_code_info_t *, jl_returninfo_t::CallingConv, Function *>> workqueue;
 #define jl_Module ctx.f->getParent()
 #define jl_builderModule(builder) (builder).GetInsertBlock()->getParent()->getParent()
 
@@ -531,7 +530,10 @@ static jl_returninfo_t get_specsig_function(Module *M, StringRef name, jl_value_
 // function and module, and visible local variables and labels.
 class jl_codectx_t {
 public:
+    typedef std::vector<std::tuple<jl_method_instance_t *, jl_returninfo_t::CallingConv, Function *>> callees;
+
     IRBuilder<> builder;
+    callees *call_targets = NULL;
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -563,8 +565,8 @@ public:
     bool debug_enabled = false;
     const jl_cgparams_t *params = NULL;
 
-    jl_codectx_t(LLVMContext &llvmctx)
-      : builder(llvmctx) { }
+    jl_codectx_t(LLVMContext &llvmctx, jl_codectx_t::callees *call_targets=NULL)
+      : builder(llvmctx), call_targets(call_targets) { }
 
     ~jl_codectx_t() {
         assert(this->roots == NULL);
@@ -1073,13 +1075,18 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         jl_code_info_t *src,
         size_t world,
         bool cacheable,
+        jl_codectx_t::callees *workqueue,
         const jl_cgparams_t *params);
 static void emit_cfunc_invalidate(
         Function *gf_thunk, jl_returninfo_t::CallingConv cc,
         jl_method_instance_t *lam, size_t nargs, size_t world);
-static void process_workqueue(
-        jl_method_instance_t **pli, jl_llvm_functions_t *pdecls,
-        size_t world, const jl_cgparams_t *params);
+static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+    jl_compile_linfo1(
+        jl_method_instance_t **pli,
+        jl_code_info_t *src,
+        size_t world,
+        jl_codectx_t::callees &workqueue,
+        const jl_cgparams_t *params);
 void jl_add_linfo_in_flight(StringRef name, jl_method_instance_t *linfo, const DataLayout &DL);
 
 // this generates llvm code for the lambda info
@@ -1123,14 +1130,82 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
         if (!nested_compile && dump_compiles_stream != NULL)
             last_time = jl_hrtime();
         nested_compile = true;
-        decltype(workqueue) workqueue_stack;
-        std::swap(workqueue, workqueue_stack);
-        workqueue.push_back(std::make_tuple(li, src, jl_returninfo_t::CallingConv::Boxed, (llvm::Function*)NULL));
-        process_workqueue(pli, &decls, world, params);
+        std::vector<std::tuple<std::unique_ptr<Module>, jl_method_instance_t *, jl_llvm_functions_t>> emitted;
+
+        jl_codectx_t::callees workqueue;
+        std::unique_ptr<Module> m;
+        std::tie(m, decls) = jl_compile_linfo1(pli, src, world, workqueue, params);
+        if (m)
+            emitted.push_back(std::make_tuple(std::move(m), li, decls));
+        while (!workqueue.empty()) {
+            jl_llvm_functions_t decls;
+            jl_method_instance_t *li;
+            Function *protodecl;
+            jl_returninfo_t::CallingConv cc;
+            std::tie(li, cc, protodecl) = workqueue.back();
+            workqueue.pop_back();
+            // try to emit code
+            std::tie(m, decls) = jl_compile_linfo1(&li, NULL, world, workqueue, params);
+            // patch up the prototype we emitted earlier
+            bool specsig = protodecl->getName().startswith("julia_spectrampoline_");
+            Module *mod = protodecl->getParent();
+            const char **preal_decl = (specsig ? &decls.specFunctionObject : &decls.functionObject);
+            if (!*preal_decl) {
+                if (specsig) {
+                    // TODO: generate a call attempt to li->specfptr?
+                    jl_init_function(protodecl);
+                    protodecl->addFnAttr("no-frame-pointer-elim", "true");
+                    size_t nargs = jl_nparams(li->specTypes); // number of actual arguments being passed
+                    emit_cfunc_invalidate(protodecl, cc, li, nargs, world);
+                    *preal_decl = strdup(protodecl->getName().str().c_str());
+                }
+                else {
+                    // TODO: generate a call to li->fptr1
+                    protodecl->replaceAllUsesWith(prepare_call_in(mod, jlapply2va_func));
+                }
+            }
+            if (*preal_decl) {
+                if (Value *specfun = mod->getNamedValue(*preal_decl)) {
+                    if (protodecl != specfun)
+                        protodecl->replaceAllUsesWith(specfun);
+                }
+                else {
+                    protodecl->setName(*preal_decl);
+                }
+            }
+            if (m)
+                emitted.push_back(std::make_tuple(std::move(m), li, decls));
+        }
+
+        // note: this also consumes `workqueue` (specifically, the Function* objects)
+        for (auto &def : emitted) {
+            Module *m = std::get<0>(def).release();
+            jl_method_instance_t *li = std::get<1>(def);
+            jl_llvm_functions_t decls = std::get<2>(def);
+            if (JL_HOOK_TEST(params, module_activation)) {
+                JL_HOOK_CALL(params, module_activation, 1, jl_box_voidpointer(wrap(m)));
+            } else {
+                // Step 4. Prepare debug info to receive this function
+                // record that this function name came from this linfo,
+                // so we can build a reverse mapping for debug-info.
+                bool toplevel = !jl_is_method(li->def.method);
+                if (!toplevel) {
+                    const DataLayout &DL = m->getDataLayout();
+                    // but don't remember toplevel thunks because
+                    // they may not be rooted in the gc for the life of the program,
+                    // and the runtime doesn't notify us when the code becomes unreachable :(
+                    const char *f = decls.functionObject;
+                    const char *specf = decls.specFunctionObject;
+                    jl_add_linfo_in_flight(StringRef(specf ? specf : f), li, DL);
+                }
+
+                // Step 5. Add the result to the execution engine now
+                jl_finalize_module(m, !toplevel);
+            }
+        }
 
         // Step 6: Done compiling: Restore global state
         nested_compile = last_n_c;
-        std::swap(workqueue, workqueue_stack);
     }
 
     JL_UNLOCK(&codegen_lock); // Might GC
@@ -1150,180 +1225,111 @@ jl_llvm_functions_t jl_compile_linfo(jl_method_instance_t **pli, jl_code_info_t 
     return decls;
 }
 
-static void process_workqueue(
-        jl_method_instance_t **pli, jl_llvm_functions_t *pdecls,
-        size_t world, const jl_cgparams_t *params)
+static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+    jl_compile_linfo1(
+        jl_method_instance_t **pli,
+        jl_code_info_t *src,
+        size_t world,
+        jl_codectx_t::callees &workqueue,
+        const jl_cgparams_t *params)
 {
-    // Step 3. actually do the work of emitting the functions
-    jl_code_info_t *src = NULL;
+    // Step 1: Re-check if this was already compiled
+    // (it may have been while we waited at the lock)
+    jl_method_instance_t *li = *pli;
+    jl_llvm_functions_t decls = {};
+    if (params->cached)
+        decls = li->functionObjectsDecls;
+    std::unique_ptr<Module> m;
     JL_GC_PUSH1(&src);
-    std::vector<std::tuple<std::unique_ptr<Module>, jl_method_instance_t *, jl_llvm_functions_t>> emitted;
-    while (!workqueue.empty()) {
-        jl_method_instance_t *li;
-        Function *protodecl;
-        jl_returninfo_t::CallingConv cc;
-        std::tie(li, src, cc, protodecl) = workqueue.back();
-        if (pli)
-            assert(*pli == li);
-        workqueue.pop_back();
-        // Step 1: Re-check if this was already compiled
-        // (it may have been while we waited at the lock)
-        jl_llvm_functions_t decls;
-        if (params->cached) {
-            decls = li->functionObjectsDecls;
+    if (!decls.functionObject) {
+        // get a CodeInfo object to compile
+        if (!jl_is_method(li->def.method)) {
+            src = (jl_code_info_t*)li->inferred;
+            if (!src || !jl_is_code_info(src) || li->jlcall_api == 2) {
+                goto out;
+            }
+        }
+        else if (src) {
+            src = jl_uncompress_ast(li->def.method, (jl_array_t*)src);
         }
         else {
-            decls.functionObject = NULL;
-            decls.specFunctionObject = NULL;
-        }
-        std::unique_ptr<Module> m;
-        if (!decls.functionObject) {
-            // get a CodeInfo object to compile
-            if (!jl_is_method(li->def.method)) {
-                src = (jl_code_info_t*)li->inferred;
-                if (!src || !jl_is_code_info(src) || li->jlcall_api == 2) {
-                    goto fail_compile;
+            // If the caller didn't provide the source,
+            // try to infer it for ourself, but first, re-check if it's already compiled.
+            assert(li->min_world <= world && li->max_world >= world);
+            if (li->jlcall_api == 2)
+                goto out;
+
+            // see if it is inferred
+            src = (jl_code_info_t*)li->inferred;
+            if (src) {
+                if ((jl_value_t*)src != jl_nothing)
+                    src = jl_uncompress_ast(li->def.method, (jl_array_t*)src);
+                if (!jl_is_code_info(src)) {
+                    src = jl_type_infer(&li, world, 0);
+                    *pli = li;
                 }
-            }
-            else if (src) {
-                src = jl_uncompress_ast(li->def.method, (jl_array_t*)src);
+                if (!src || li->jlcall_api == 2)
+                    goto out;
             }
             else {
-                // If the caller didn't provide the source,
-                // try to infer it for ourself, but first, re-check if it's already compiled.
-                assert(li->min_world <= world && li->max_world >= world);
-                if (li->jlcall_api == 2)
-                    goto fail_compile;
-
-                // see if it is inferred
-                src = (jl_code_info_t*)li->inferred;
-                if (src) {
-                    if ((jl_value_t*)src != jl_nothing)
-                        src = jl_uncompress_ast(li->def.method, (jl_array_t*)src);
-                    if (!jl_is_code_info(src)) {
-                        src = jl_type_infer(&li, world, 0);
-                        if (pli)
-                            *pli = li;
-                    }
-                    if (!src || li->jlcall_api == 2)
-                        goto fail_compile;
-                }
-                else {
-                    // declare a failure to compile
-                    goto fail_compile;
-                }
-            }
-            assert(jl_is_code_info(src));
-
-            bool cacheable = false;
-            if (params->cached) {
-                if (li->min_world <= world && li->max_world >= world)
-                    cacheable = true;
-                if (!jl_is_method(li->def.method)) // toplevel thunk
-                    cacheable = true;
-            }
-            JL_TRY {
-                std::tie(m, decls) = emit_function(li, src, world, cacheable, params);
-            }
-            JL_CATCH {
-                // Something failed! This is very, very bad.
-                // Try to pretend that it isn't and attempt to recover.
-                jl_ptls_t ptls = jl_get_ptls_states();
-                decls.functionObject = NULL;
-                decls.specFunctionObject = NULL;
-                if (cacheable)
-                    li->functionObjectsDecls = decls;
-                const char *mname = jl_symbol_name(jl_is_method(li->def.method) ? li->def.method->name : anonymous_sym);
-                jl_printf(JL_STDERR, "Internal error: encountered unexpected error during compilation of %s:\n", mname);
-                jl_static_show(JL_STDERR, ptls->exception_in_transit);
-                jl_printf(JL_STDERR, "\n");
-                jlbacktrace(); // written to STDERR_FILENO
-                goto fail_compile;
-            }
-            emitted.push_back(std::make_tuple(std::move(m), li, decls));
-
-            if (cacheable) {
-                // if not inlineable, code won't be needed again
-                if (JL_DELETE_NON_INLINEABLE &&
-                        // don't delete code when debugging level >= 2
-                        jl_options.debug_level <= 1 &&
-                        // don't delete toplevel code
-                        jl_is_method(li->def.method) &&
-                        // don't change inferred state
-                        li->inferred &&
-                        // and there is something to delete (test this before calling jl_ast_flag_inlineable)
-                        li->inferred != jl_nothing &&
-                        // don't delete inlineable code, unless it is constant
-                        (li->jlcall_api == 2 || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
-                        // don't delete code when generating a precompile file
-                        !imaging_mode &&
-                        // don't delete code when it's not actually directly being used
-                        world) {
-                    li->inferred = jl_nothing;
-                }
+                // declare a failure to compile
+                goto out;
             }
         }
-fail_compile: ;
-        if (protodecl) {
-            bool specsig = protodecl->getName().startswith("julia_spectrampoline_");
-            Module *mod = protodecl->getParent();
-            const char **preal_decl = (specsig ? &decls.specFunctionObject : &decls.functionObject);
-            if (!*preal_decl) {
-                if (specsig) {
-                    // TODO: generate a call attempt to li->specfptr
-                    jl_init_function(protodecl);
-                    size_t nargs = jl_nparams(li->specTypes); // number of actual arguments being passed
-                    emit_cfunc_invalidate(protodecl, cc, li, nargs, world);
-                    *preal_decl = strdup(protodecl->getName().str().c_str());
-                }
-                else {
-                    // TODO: generate a call to li->fptr1
-                    protodecl->replaceAllUsesWith(prepare_call_in(mod, jlapply2va_func));
-                }
-            }
-            if (*preal_decl) {
-                if (Value *specfun = mod->getNamedValue(*preal_decl)) {
-                    if (protodecl != specfun)
-                        protodecl->replaceAllUsesWith(specfun);
-                }
-                else {
-                    protodecl->setName(*preal_decl);
-                }
-            }
+        assert(jl_is_code_info(src));
+
+        bool cacheable = false;
+        if (params->cached) {
+            if (li->min_world <= world && li->max_world >= world)
+                cacheable = true;
+            if (!jl_is_method(li->def.method)) // toplevel thunk
+                cacheable = true;
         }
-        if (pdecls)
-            *pdecls = decls;
-        pli = NULL;
-        pdecls = NULL;
-    }
+        // Step 3. actually do the work of emitting the functions
+        JL_TRY {
+            std::tie(m, decls) = emit_function(li, src, world, cacheable, &workqueue, params);
+        }
+        JL_CATCH {
+            // Something failed! This is very, very bad.
+            // Try to pretend that it isn't and attempt to recover.
+            jl_ptls_t ptls = jl_get_ptls_states();
+            m.reset();
+            decls.functionObject = NULL;
+            decls.specFunctionObject = NULL;
+            if (cacheable)
+                li->functionObjectsDecls = decls;
+            const char *mname = jl_symbol_name(jl_is_method(li->def.method) ? li->def.method->name : anonymous_sym);
+            jl_printf(JL_STDERR, "Internal error: encountered unexpected error during compilation of %s:\n", mname);
+            jl_static_show(JL_STDERR, ptls->exception_in_transit);
+            jl_printf(JL_STDERR, "\n");
+            jlbacktrace(); // written to STDERR_FILENO
+            goto out;
+        }
 
-    for (auto &def : emitted) {
-        Module *m = std::get<0>(def).release();
-        jl_method_instance_t *li = std::get<1>(def);
-        jl_llvm_functions_t decls = std::get<2>(def);
-        if (JL_HOOK_TEST(params, module_activation)) {
-            JL_HOOK_CALL(params, module_activation, 1, jl_box_voidpointer(wrap(m)));
-        } else {
-            // Step 4. Prepare debug info to receive this function
-            // record that this function name came from this linfo,
-            // so we can build a reverse mapping for debug-info.
-            bool toplevel = !jl_is_method(li->def.method);
-            if (!toplevel) {
-                const DataLayout &DL = m->getDataLayout();
-                // but don't remember toplevel thunks because
-                // they may not be rooted in the gc for the life of the program,
-                // and the runtime doesn't notify us when the code becomes unreachable :(
-                const char *f = decls.functionObject;
-                const char *specf = decls.specFunctionObject;
-                jl_add_linfo_in_flight(StringRef(specf ? specf : f), li, DL);
+        if (cacheable) {
+            // if not inlineable, code won't be needed again
+            if (JL_DELETE_NON_INLINEABLE &&
+                    // don't delete code when debugging level >= 2
+                    jl_options.debug_level <= 1 &&
+                    // don't delete toplevel code
+                    jl_is_method(li->def.method) &&
+                    // don't change inferred state
+                    li->inferred &&
+                    // and there is something to delete (test this before calling jl_ast_flag_inlineable)
+                    li->inferred != jl_nothing &&
+                    // don't delete inlineable code, unless it is constant
+                    (li->jlcall_api == 2 || !jl_ast_flag_inlineable((jl_array_t*)li->inferred)) &&
+                    // don't delete code when generating a precompile file
+                    !imaging_mode &&
+                    // don't delete code when it's not actually directly being used
+                    world) {
+                li->inferred = jl_nothing;
             }
-
-            // Step 5. Add the result to the execution engine now
-            jl_finalize_module(m, !toplevel);
         }
     }
-
+out:
     JL_GC_POP();
+    return std::make_pair(std::move(m), decls);
 }
 
 #define getModuleFlag(m,str) m->getModuleFlag(str)
@@ -1592,7 +1598,7 @@ void *jl_get_llvmf_defn(jl_method_instance_t *linfo, size_t world, bool getwrapp
     jl_llvm_functions_t declarations;
     std::unique_ptr<Module> m;
     JL_TRY {
-        std::tie(m, declarations) = emit_function(linfo, src, world, false, &params);
+        std::tie(m, declarations) = emit_function(linfo, src, world, false, NULL, &params);
     }
     JL_CATCH {
         // something failed!
@@ -3197,7 +3203,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, jl_expr_t *ex)
                 result = emit_call_function_object(ctx, li, protoname, argv, nargs, rt);
             if (need_to_emit) {
                 Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
-                workqueue.push_back(std::make_tuple(li, (jl_code_info_t*)NULL, cc, trampoline_decl));
+                if (ctx.call_targets)
+                    ctx.call_targets->push_back(std::make_tuple(li, cc, trampoline_decl));
             }
         }
         else {
@@ -4935,11 +4942,12 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         jl_code_info_t *src,
         size_t world,
         bool cacheable,
+        jl_codectx_t::callees *workqueue,
         const jl_cgparams_t *params)
 {
     // step 1. unpack AST and allocate codegen context for this function
     jl_llvm_functions_t declarations;
-    jl_codectx_t ctx(jl_LLVMContext);
+    jl_codectx_t ctx(jl_LLVMContext, workqueue);
     JL_GC_PUSH2(&ctx.code, &ctx.roots);
     ctx.code = src->code;
 
