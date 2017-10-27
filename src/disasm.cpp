@@ -534,7 +534,7 @@ void SymbolTable::createSymbols()
         }
         else {
             const char *global = lookupLocalPC(addr);
-            if (!global)
+            if (!global || !global[0])
                 continue;
             name << global;
         }
