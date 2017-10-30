@@ -747,9 +747,9 @@ then tries paths in the global array `LOAD_PATH`. `require` is case-sensitive on
 all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
-function require(mod::Symbol)
+function require(into::Module, mod::Symbol)
     if !root_module_exists(mod)
-        _require(mod)
+        _require(into, mod)
         # After successfully loading, notify downstream consumers
         for callback in package_callbacks
             invokelatest(callback, mod)
@@ -806,11 +806,6 @@ function unreference_module(key)
 end
 
 function _require(mod::Symbol)
-    # dependency-tracking is only used for one top-level include(path),
-    # and is not applied recursively to imported modules:
-    old_track_dependencies = _track_dependencies[]
-    _track_dependencies[] = false
-
     # handle recursive calls to require
     loading = get(package_locks, mod, false)
     if loading !== false
@@ -889,7 +884,6 @@ function _require(mod::Symbol)
         toplevel_load[] = last
         loading = pop!(package_locks, mod)
         notify(loading, all=true)
-        _track_dependencies[] = old_track_dependencies
     end
     nothing
 end
@@ -1228,6 +1222,20 @@ function stale_cachefile(modpath::String, cachefile::String)
                 return true # cache file was compiled from a different path
             end
             for (_, f, ftime_req) in files
+                # Issue #13606: compensate for Docker images rounding mtimes
+                # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
+                ftime = mtime(f)
+                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
+                    @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
+                    return true
+                end
+            end
+                return true # cache file was compiled from a different path
+            end
+            for (modkey, req_modkey) in requires
+                # TODO: verify `require(modkey, name(req_modkey))` ==> `req_modkey`
+            end
+            for (_, f, ftime_req) in includes
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
                 ftime = mtime(f)

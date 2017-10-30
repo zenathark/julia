@@ -150,14 +150,14 @@ try
     @test __precompile__(true) === nothing
 
     # Issue #21307
-    Base.require(Foo2_module)
+    Base.require(Main, Foo2_module)
     @eval let Foo2_module = $(QuoteNode(Foo2_module)), # use @eval to see the results of loading the compile
               Foo = root_module(Foo2_module)
         Foo.override(::Int) = 'a'
         Foo.override(::Float32) = 'b'
     end
 
-    Base.require(Foo_module)
+    Base.require(Main, Foo_module)
 
     @eval let Foo_module = $(QuoteNode(Foo_module)), # use @eval to see the results of loading the compile
               Foo = root_module(Foo_module)
@@ -337,7 +337,7 @@ try
           end
           """)
     @test_warn "ERROR: LoadError: break me\nStacktrace:\n [1] error" try
-        Base.require(:FooBar2)
+        Base.require(Main, :FooBar2)
         error("\"LoadError: break me\" test failed")
     catch exc
         isa(exc, ErrorException) || rethrow(exc)
@@ -377,7 +377,7 @@ try
           """)
     rm(FooBarT_file)
     @test Base.stale_cachefile(FooBarT2_file, joinpath(dir2, "FooBarT2.ji")) === true
-    @test Base.require(:FooBarT2) isa Module
+    @test Base.require(Main, :FooBarT2) isa Module
 finally
     splice!(Base.LOAD_CACHE_PATH, 1:2)
     splice!(LOAD_PATH, 1)
@@ -510,7 +510,7 @@ let dir = mktempdir()
               """)
         Base.compilecache("$(Test2_module)")
         @test !Base.isbindingresolved(Main, Test2_module)
-        Base.require(Test2_module)
+        Base.require(Main, Test2_module)
         @test take!(loaded_modules) == Test1_module
         @test take!(loaded_modules) == Test2_module
         write(joinpath(dir, "$(Test3_module).jl"),
@@ -519,7 +519,7 @@ let dir = mktempdir()
                   using $(Test3_module)
               end
               """)
-        Base.require(Test3_module)
+        Base.require(Main, Test3_module)
         @test take!(loaded_modules) == Test3_module
     finally
         pop!(Base.package_callbacks)
@@ -632,12 +632,12 @@ try
 
           end
           """)
-    Base.require(A_module)
+    Base.require(Main, A_module)
     A = root_module(A_module)
     for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
         Base.delete_method(mths[1])
     end
-    Base.require(B_module)
+    Base.require(Main, B_module)
     B = root_module(B_module)
     @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
     @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2

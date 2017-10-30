@@ -406,15 +406,18 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
     }
 }
 
-static jl_module_t *call_require(jl_sym_t *var)
+static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var)
 {
     static jl_value_t *require_func = NULL;
     jl_module_t *m = NULL;
     if (require_func == NULL && jl_base_module != NULL)
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     if (require_func != NULL) {
-        jl_value_t *reqargs[2] = {require_func, (jl_value_t*)var};
-        m = (jl_module_t*)jl_apply(reqargs, 2);
+        jl_value_t *reqargs[3];
+        reqargs[0] = require_func;
+        reqargs[1] = (jl_value_t*)mod;
+        reqargs[2] = (jl_value_t*)var;
+        m = (jl_module_t*)jl_apply(reqargs, 3);
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
@@ -447,7 +450,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from, jl_a
             m = jl_base_module;
         }
         else {
-            m = call_require(var);
+            m = call_require(where, var);
         }
         if (i == jl_array_len(args))
             return m;
@@ -528,7 +531,7 @@ static jl_module_t *deprecation_replacement_module(jl_module_t *parent, jl_sym_t
 {
     if (parent == jl_base_module) {
         if (name == jl_symbol("Test") || name == jl_symbol("Mmap"))
-            return call_require(name);
+            return call_require(jl_base_module, name);
     }
     return NULL;
 }
