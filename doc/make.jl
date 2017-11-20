@@ -30,6 +30,7 @@ if Sys.iswindows()
     cp_q("../stdlib/FileWatching/docs/src/index.md",   "src/stdlib/filewatching.md")
     cp_q("../stdlib/CRC32c/docs/src/index.md",         "src/stdlib/crc32c.md")
     cp_q("../stdlib/Dates/docs/src/index.md",          "src/stdlib/dates.md")
+    cp_q("../stdlib/Pkg/docs/src/index.md",            "src/stdlib/pkg.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md",           "src/stdlib/test.md")
@@ -40,6 +41,7 @@ else
     symlink_q("../../../stdlib/FileWatching/docs/src/index.md",   "src/stdlib/filewatching.md")
     symlink_q("../../../stdlib/CRC32c/docs/src/index.md",         "src/stdlib/crc32c.md")
     symlink_q("../../../stdlib/Dates/docs/src/index.md",          "src/stdlib/dates.md")
+    symlink_q("../../../stdlib/Pkg/docs/src/index.md",            "src/stdlib/pkg.md")
 end
 
 const PAGES = [
@@ -72,8 +74,7 @@ const PAGES = [
         "manual/running-external-programs.md",
         "manual/calling-c-and-fortran-code.md",
         "manual/handling-operating-system-variation.md",
-        "manual/environment-variables.md",
-        "manual/embedding.md",
+        "manual/environment-variables.md", "manual/embedding.md",
         "manual/packages.md",
         "manual/profile.md",
         "manual/stacktraces.md",
@@ -148,11 +149,19 @@ const PAGES = [
     ],
 ]
 
+<<<<<<< HEAD
 using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
     modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, Dates],
+=======
+using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Pkg
+
+makedocs(
+    build     = joinpath(pwd(), "_build/html/en"),
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, Pkg],
+>>>>>>> restructure
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,
