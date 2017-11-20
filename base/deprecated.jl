@@ -828,9 +828,6 @@ unsafe_wrap(::Type{String}, p::Cstring, own::Bool=false) = unsafe_wrap(String, c
 unsafe_wrap(::Type{String}, p::Cstring, len::Integer, own::Bool=false) =
     unsafe_wrap(String, convert(Ptr{UInt8}, p), len, own)
 
-# #19660
-@deprecate finalize(sa::LibGit2.StrArrayStruct) LibGit2.free(sa)
-@deprecate finalize(sa::LibGit2.Buffer) LibGit2.free(sa)
 
 ## produce, consume, and task iteration
 # NOTE: When removing produce/consume, also remove field Task.consumers and related code in
@@ -946,30 +943,6 @@ isempty(::Task) = error("isempty not defined for Tasks")
 end
 
 @deprecate EachLine(stream, ondone) EachLine(stream, ondone=ondone)
-
-# LibGit2 refactor (#19839)
-@eval Base.LibGit2 begin
-     Base.@deprecate_binding Oid GitHash
-     Base.@deprecate_binding GitAnyObject GitUnknownObject
-
-     @deprecate owner(x) repository(x) false
-     @deprecate get(::Type{T}, repo::GitRepo, x) where {T<:GitObject} T(repo, x) false
-     @deprecate get(::Type{T}, repo::GitRepo, oid::GitHash, oid_size::Int) where {T<:GitObject} T(repo, GitShortHash(oid, oid_size)) false
-     @deprecate revparse(repo::GitRepo, objname::AbstractString) GitObject(repo, objname) false
-     @deprecate object(repo::GitRepo, te::GitTreeEntry) GitObject(repo, te) false
-     @deprecate commit(ann::GitAnnotated) GitHash(ann) false
-     @deprecate lookup(repo::GitRepo, oid::GitHash) GitBlob(repo, oid) false
-    function Base.cat(repo::GitRepo, ::Type{T}, spec::Union{AbstractString,AbstractGitHash}) where T<:GitObject
-        Base.depwarn("cat(repo::GitRepo, T, spec) is deprecated, use content(T(repo, spec))", :cat)
-        try
-            return content(GitBlob(repo, spec))
-        catch e
-            isa(e, LibGit2.GitError) && return nothing
-            rethrow(e)
-        end
-    end
-    Base.cat(repo::GitRepo, spec::Union{AbstractString,AbstractGitHash}) = cat(repo, GitBlob, spec)
-end
 
 # TODO: remove `:typealias` from BINDING_HEADS in base/docs/Docs.jl
 # TODO: remove `'typealias` case in expand-table in julia-syntax.scm
@@ -1192,20 +1165,6 @@ DEPRECATED: use @__MODULE__ instead
     return _current_module()
 end
 export current_module
-
-# PR #22062
-function LibGit2.set_remote_url(repo::LibGit2.GitRepo, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(repo, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(repo, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(repo, remote, url)
-end
-function LibGit2.set_remote_url(path::AbstractString, url::AbstractString; remote::AbstractString="origin")
-    Base.depwarn(string(
-        "`LibGit2.set_remote_url(path, url; remote=remote)` is deprecated, use ",
-        "`LibGit2.set_remote_url(path, remote, url)` instead."), :set_remote_url)
-    LibGit2.set_remote_url(path, remote, url)
-end
 
 module Operators
     for op in [:!, :(!=), :(!==), :%, :&, :*, :+, :-, :/, ://, :<, :<:, :<<, :(<=),
@@ -1474,16 +1433,6 @@ end
 # deprecate logm in favor of log
 @deprecate logm log
 
-# PR #23092
-@eval LibGit2 begin
-    function prompt(msg::AbstractString; default::AbstractString="", password::Bool=false)
-        Base.depwarn(string(
-            "`LibGit2.prompt(msg::AbstractString; default::AbstractString=\"\", password::Bool=false)` is deprecated, use ",
-            "`get(Base.prompt(msg, default=default, password=password), \"\")` instead."), :prompt)
-        Base.get(Base.prompt(msg, default=default, password=password), "")
-    end
-end
-
 # PR #23187
 @deprecate cpad(s, n::Integer, p=" ") rpad(lpad(s, div(n+textwidth(s), 2), p), n, p) false
 
@@ -1623,32 +1572,6 @@ import .Iterators.enumerate
 @deprecate -(a::Number, b::AbstractArray) broadcast(-, a, b)
 @deprecate -(a::AbstractArray, b::Number) broadcast(-, a, b)
 
-# PR #23640
-# when this deprecation is deleted, remove all calls to it, and replace all keywords of:
-# `payload::Union{CredentialPayload,Nullable{<:AbstractCredentials}}` with
-# `payload::CredentialPayload` from base/libgit2/libgit2.jl
-@eval LibGit2 function deprecate_nullable_creds(f, sig, payload)
-    if isa(payload, Nullable{<:AbstractCredentials})
-        # Note: Be careful not to show the contents of the credentials as it could reveal a
-        # password.
-        if isnull(payload)
-            msg = "LibGit2.$f($sig; payload=Nullable()) is deprecated, use "
-            msg *= "LibGit2.$f($sig; payload=LibGit2.CredentialPayload()) instead."
-            p = CredentialPayload()
-        else
-            cred = unsafe_get(payload)
-            C = typeof(cred)
-            msg = "LibGit2.$f($sig; payload=Nullable($C(...))) is deprecated, use "
-            msg *= "LibGit2.$f($sig; payload=LibGit2.CredentialPayload($C(...))) instead."
-            p = CredentialPayload(cred)
-        end
-        Base.depwarn(msg, f)
-    else
-        p = payload::CredentialPayload
-    end
-    return p
-end
-
 # ease transition for return type change of e.g. indmax due to PR #22907 when used in the
 # common pattern `ind2sub(size(a), indmax(a))`
 @deprecate(ind2sub(dims::NTuple{N,Integer}, idx::CartesianIndex{N}) where N, Tuple(idx))
@@ -1688,10 +1611,6 @@ end
 @deprecate zeros(D::Diagonal, ::Type{T}, dims::Dims) where {T}          fill!(similar(D, T, dims), 0)
 @deprecate zeros(D::Diagonal, ::Type{T}, dims::Integer...) where {T}    fill!(similar(D, T, dims), 0)
 
-# PR #23690
-# `SSHCredentials` and `UserPasswordCredentials` constructors using `prompt_if_incorrect`
-# are deprecated in base/libgit2/types.jl.
-
 # deprecate ones/zeros methods accepting an array as first argument
 @deprecate ones(a::AbstractArray, ::Type{T}, dims::Tuple) where {T} fill!(similar(a, T, dims), 1)
 @deprecate ones(a::AbstractArray, ::Type{T}, dims...) where {T}     fill!(similar(a, T, dims...), 1)
@@ -1701,11 +1620,6 @@ end
 @deprecate zeros(a::AbstractArray, ::Type{T}, dims...) where {T}      fill!(similar(a, T, dims...), 0)
 @deprecate zeros(a::AbstractArray, ::Type{T}) where {T}               fill!(similar(a, T), 0)
 @deprecate zeros(a::AbstractArray)                                    fill!(similar(a), 0)
-
-# PR #23711
-@eval LibGit2 begin
-    @deprecate get_creds!(cache::CachedCredentials, credid, default) get!(cache, credid, default)
-end
 
 ## goodbeye, eye!
 export eye
@@ -1754,6 +1668,7 @@ end
 @eval Base.LinAlg import Base.eye
 # @eval Base.SparseArrays import Base.eye # SparseArrays has an eye for things cholmod
 
+@deprecate eye(::Type{Diagonal{T}}, n::Int) where {T} Diagonal{T}(I, n)
 
 export tic, toq, toc
 function tic()

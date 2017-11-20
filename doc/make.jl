@@ -32,6 +32,7 @@ if Sys.iswindows()
     cp_q("../stdlib/CRC32c/docs/src/index.md",         "src/stdlib/crc32c.md")
     cp_q("../stdlib/Dates/docs/src/index.md",          "src/stdlib/dates.md")
     cp_q("../stdlib/Pkg/docs/src/index.md",            "src/stdlib/pkg.md")
+    cp_q("../stdlib/LibGit2/docs/src/index.md",        "src/devdocs/libgit2.md")
 else
     symlink_q("../../../stdlib/DelimitedFiles/docs/src/index.md", "src/stdlib/delimitedfiles.md")
     symlink_q("../../../stdlib/Test/docs/src/index.md",           "src/stdlib/test.md")
@@ -43,6 +44,7 @@ else
     symlink_q("../../../stdlib/CRC32c/docs/src/index.md",         "src/stdlib/crc32c.md")
     symlink_q("../../../stdlib/Dates/docs/src/index.md",          "src/stdlib/dates.md")
     symlink_q("../../../stdlib/Pkg/docs/src/index.md",            "src/stdlib/pkg.md")
+    symlink_q("../../../stdlib/LibGit2/docs/src/index.md",        "src/devdocs/libgit2.md")
 end
 
 const PAGES = [
@@ -151,11 +153,11 @@ const PAGES = [
     ],
 ]
 
-using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates, Pkg
+using DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates, Pkg, LibGit2
 
 makedocs(
     build     = joinpath(pwd(), "_build/html/en"),
-    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, CRC32c, Dates, Pkg],
+    modules   = [Base, Core, BuildSysImg, DelimitedFiles, Test, Mmap, SharedArrays, Profile, Base64, FileWatching, Dates, Pkg, LibGit2],
     clean     = false,
     doctest   = "doctest" in ARGS,
     linkcheck = "linkcheck" in ARGS,

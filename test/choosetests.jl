@@ -46,7 +46,7 @@ function choosetests(choices = [])
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
-        "nullable", "meta", "stacktraces", "libgit2", "docs",
+        "nullable", "meta", "stacktraces", "docs",
         "markdown", "serialize", "misc", "threads",
         "enums", "cmdlineargs", "i18n", "workspace", "libdl", "int",
         "checked", "bitset", "floatfuncs", "compile", "distributed", "inline",
@@ -150,7 +150,7 @@ function choosetests(choices = [])
         prepend!(tests, ["ambiguous"])
     end
 
-    net_required_for = ["socket", "distributed", "libgit2"]
+    net_required_for = ["socket", "distributed"]
     net_on = true
     try
         ipa = getipaddr()
@@ -184,5 +184,6 @@ function choosetests(choices = [])
 
     filter!(x -> !(x in skip_tests), tests)
 
+    @show tests
     tests, net_on, exit_on_error, seed
 end

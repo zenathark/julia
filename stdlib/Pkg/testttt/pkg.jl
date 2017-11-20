@@ -266,7 +266,7 @@ temp_pkg_dir() do
     end
 
     # Various pin/free/re-pin/change-pin patterns (issue #17176)
-    @test "" == capture_stdout() do
+    #@test "" == capture_stdout() do
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
 
         @test_warn r"^INFO: Creating Example branch pinned\.[0-9a-f]{8}\.tmp$" Pkg.pin("Example")
@@ -307,7 +307,7 @@ temp_pkg_dir() do
 
         @test_warn "INFO: Freeing Example" Pkg.free("Example")
         @test Pkg.installed("Example") == vers
-    end
+    #end
 
     begin
         # bug identified in #16850, Base.url \ vs / for non-Base methods

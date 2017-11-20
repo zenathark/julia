@@ -93,7 +93,6 @@ Base.Distributed
 Base.Docs
 Base.Iterators
 Base.LAPACK
-Base.LibGit2
 Base.Libc
 Base.Libdl
 Base.LinAlg

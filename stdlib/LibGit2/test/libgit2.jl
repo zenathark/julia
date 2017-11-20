@@ -1,12 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "TestHelpers.jl"))
+isdefined(Main, :TestHelpers) || @eval Main include(joinpath(@__DIR__, "..", "..", "..", "test", "TestHelpers.jl"))
 import Main.TestHelpers: challenge_prompt
 
 const LIBGIT2_MIN_VER = v"0.23.0"
 const LIBGIT2_HELPER_PATH = joinpath(@__DIR__, "libgit2-helpers.jl")
 
-const KEY_DIR = joinpath(@__DIR__, "libgit2")
+const KEY_DIR = joinpath(@__DIR__, "passfiles")
 const HOME = Sys.iswindows() ? "USERPROFILE" : "HOME"  # Environment variable name for home
 const GIT_INSTALLED = try
     success(`git --version`)
@@ -921,7 +921,7 @@ mktempdir() do dir
                 tree_entry = tree[1]
                 @test LibGit2.filemode(tree_entry) == 33188
                 te_str = sprint(show, tree_entry)
-                ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: Base.LibGit2.GitBlob\nEntry OID: "
+                ref_te_str = "GitTreeEntry:\nEntry name: testfile\nEntry type: LibGit2.GitBlob\nEntry OID: "
                 ref_te_str *= "$(LibGit2.entryid(tree_entry))\n"
                 @test te_str == ref_te_str
                 blob = LibGit2.GitBlob(tree_entry)
@@ -1082,7 +1082,7 @@ mktempdir() do dir
             # switch back, try to cherrypick
             # from branch/cherry_a
             LibGit2.branch!(repo, "master")
-            LibGit2.cherrypick(repo, cmt, options=Base.LibGit2.CherrypickOptions())
+            LibGit2.cherrypick(repo, cmt, options=LibGit2.CherrypickOptions())
             cmt_oid2 = LibGit2.commit(repo, "add file1")
             @test isempty(LibGit2.diff_files(repo, "master", "branch/cherry_a"))
         end
