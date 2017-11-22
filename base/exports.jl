@@ -952,9 +952,9 @@ export
     module_name,
     module_parent,
     names,
+    varinfo,
     versioninfo,
     which,
-    whos,
     workspace,
     @isdefined,
 
