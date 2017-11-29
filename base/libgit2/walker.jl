@@ -64,12 +64,12 @@ Start the [`GitRevWalker`](@ref) `walker` at commit `cid`. This function can be 
 to apply a function to all commits since a certain year, by passing the first commit
 of that year as `cid` and then passing the resulting `w` to [`map`](@ref LibGit2.map).
 """
-function Base.push!(w::GitRevWalker, cid::GitHash)
+function push!(w::GitRevWalker, cid::GitHash)
     @check ccall((:git_revwalk_push, :libgit2), Cint, (Ptr{Void}, Ptr{GitHash}), w.ptr, Ref(cid))
     return w
 end
 
-function Base.push!(w::GitRevWalker, range::AbstractString)
+function push!(w::GitRevWalker, range::AbstractString)
     @check ccall((:git_revwalk_push_range, :libgit2), Cint, (Ptr{Void}, Ptr{UInt8}), w.ptr, range)
     return w
 end

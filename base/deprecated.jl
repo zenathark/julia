@@ -2149,6 +2149,8 @@ end
 @deprecate logspace(start, stop)     logspace(start, stop, 50)
 
 @deprecate merge!(repo::LibGit2.GitRepo, args...; kwargs...) LibGit2.merge!(repo, args...; kwargs...)
+@deprecate push!(w::LibGit2.GitRevWalker, arg) LibGit2.push!(w, arg)
+
 
 # END 0.7 deprecations
 
