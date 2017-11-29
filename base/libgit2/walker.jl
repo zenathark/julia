@@ -126,7 +126,7 @@ function Base.map(f::Function, walker::GitRevWalker;
     repo = repository(walker)
     while !done(walker, s)
         val = f(s[1], repo)
-        push!(res, val)
+        Base.push!(res, val)
         val, s = next(walker, s)
         c +=1
         count == c && break
