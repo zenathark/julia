@@ -85,6 +85,7 @@
   * [Memory-mapped I/O](@ref)
   * [Printf](@ref)
   * [Profiling](@ref lib-profiling)
+  * [Random Numbers](@ref)
   * [Shared Arrays](@ref)
   * [Unit Testing](@ref)
   * [Unicode](@ref)
