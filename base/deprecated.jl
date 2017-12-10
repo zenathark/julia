@@ -3037,6 +3037,9 @@ end
 @deprecate lpad(s, n::Integer, p) lpad(string(s), n, string(p))
 @deprecate rpad(s, n::Integer, p) rpad(string(s), n, string(p))
 
+# PR #25011
+@deprecate push!(env::EnvDict, k::AbstractString, v) push!(env, k=>v)
+
 # END 0.7 deprecations
 
 # BEGIN 1.0 deprecations
