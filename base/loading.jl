@@ -569,29 +569,29 @@ function _require_from_serialized(path::String)
     ndeps = length(depmodnames)
     depmods = Vector{Any}(uninitialized, ndeps)
     for i in 1:ndeps
-        modname, uuid = depmodnames[i]
-        if root_module_exists(modname)
-            M = root_module(modname)
-            if module_name(M) === modname && module_uuid(M) === uuid
+        modkey, builduuid = depmodnames[i]
+        if root_module_exists(modkey)
+            M = root_module(modkey)
+            if module_name(M) === modkey && module_uuid(M) === builduuid
                 depmods[i] = M
             end
         else
-            modpath, _ = find_package(string(modname))
-            modpath === nothing && return ErrorException("Required dependency $modname not found in current path.")
-            mod = _require_search_from_serialized(modname, String(modpath))
+            modpath, _ = find_package(string(modkey))
+            modpath === nothing && return ErrorException("Required dependency $modkey not found in current path.")
+            mod = _require_search_from_serialized(modkey, String(modpath))
             if !isa(mod, Bool)
                 for M in mod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
+                    if module_name(M) === modkey && module_uuid(M) === builduuid
                         depmods[i] = M
                         break
                     end
                 end
                 for callback in package_callbacks
-                    invokelatest(callback, modname)
+                    invokelatest(callback, modkey)
                 end
             end
         end
-        isassigned(depmods, i) || return ErrorException("Required dependency $modname failed to load from a cache file.")
+        isassigned(depmods, i) || return ErrorException("Required dependency $modkey failed to load from a cache file.")
     end
     # then load the file
     return _include_from_serialized(path, depmods)
@@ -611,21 +611,21 @@ function _require_search_from_serialized(mod::Symbol, sourcepath::String)
         for i in 1:length(deps)
             dep = deps[i]
             dep isa Module && continue
-            modpath, modname, uuid = dep::Tuple{String, Symbol, UInt64}
-            reqmod = _require_search_from_serialized(modname, modpath)
+            modpath, modkey, builduuid = dep::Tuple{String, Symbol, UInt64}
+            reqmod = _require_search_from_serialized(modkey, modpath)
             if !isa(reqmod, Bool)
                 for M in reqmod::Vector{Any}
-                    if module_name(M) === modname && module_uuid(M) === uuid
+                    if module_name(M) === modkey && module_uuid(M) === builduuid
                         deps[i] = M
                         break
                     end
                 end
                 for callback in package_callbacks
-                    invokelatest(callback, modname)
+                    invokelatest(callback, modkey)
                 end
             end
             if !isa(deps[i], Module)
-                @debug "Required dependency $modname failed to load from cache file for $modpath."
+                @debug "Required dependency $modkey failed to load from cache file for $modpath."
                 continue
             end
         end
@@ -655,7 +655,7 @@ const include_callbacks = Any[]
 const _concrete_dependencies = Pair{Symbol, UInt64}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(modstring::AbstractString, _path::AbstractString)
+function _include_dependency(mod::Module, _path::AbstractString)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
@@ -663,7 +663,7 @@ function _include_dependency(modstring::AbstractString, _path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (modstring, normpath(path), mtime(path)))
+        push!(_require_dependencies, (mod, normpath(path), mtime(path)))
     end
     return path, prev
 end
@@ -679,7 +679,7 @@ This is only needed if your module depends on a file that is not used via `inclu
 no effect outside of compilation.
 """
 function include_dependency(path::AbstractString)
-    _include_dependency("#__external__", path)
+    _include_dependency(Main, path)
     return nothing
 end
 
@@ -748,14 +748,18 @@ all platforms, including those with case-insensitive filesystems like macOS and
 Windows.
 """
 function require(into::Module, mod::Symbol)
-    if !root_module_exists(mod)
-        _require(into, mod)
+    uuidkey = mod
+    if _track_dependencies[]
+        push!(_require_dependencies, (into, "\0$uuidkey", 0.0))
+    end
+    if !root_module_exists(uuidkey)
+        _require(uuidkey)
         # After successfully loading, notify downstream consumers
         for callback in package_callbacks
             invokelatest(callback, mod)
         end
     end
-    return root_module(mod)
+    return root_module(uuidkey)
 end
 
 const loaded_modules = ObjectIdDict()
@@ -923,7 +927,7 @@ end
 
 include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
 function include_relative(mod::Module, _path::String)
-    path, prev = _include_dependency(string(mod), _path)
+    path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before Core.include
         invokelatest(callback, mod, path)
     end
@@ -1078,18 +1082,34 @@ function parse_cache_header(f::IO)
         push!(modules, sym => uuid)
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
-    # read the list of files
-    files = Tuple{String,String,Float64}[]
+    # read the list of requirements
+    # and split the list into include and requires statements
+    includes = Tuple{String, String, Float64}[]
+    requires = Pair{String, String}[]
     while true
-        n1 = ntoh(read(f, Int32))
-        n1 == 0 && break
-        @assert n1 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        modname = String(read(f, n1))
         n2 = ntoh(read(f, Int32))
-        @assert n2 >= 0 "EOF while reading cache header" # probably means this wasn't a valid file to be read by Base.parse_cache_header
-        filename = String(read(f, n2))
-        push!(files, (modname, filename, ntoh(read(f, Float64))))
-        totbytes -= 8 + n1 + n2 + 8
+        n2 == 0 && break
+        depname = String(read(f, n2))
+        mtime = ntoh(read(f, Float64))
+        n1 = ntoh(read(f, Int32))
+        if n1 == 0
+            modkey = "Main" # remap anything loaded outside this cache files modules to have occurred in `Main`
+        else
+            modkey = String(modules[n1][1])
+            while true
+                n1 = ntoh(read(f, Int32))
+                totbytes -= 4
+                n1 == 0 && break
+                modkey = string(modkey, ".", String(read(f, n1)))
+                totbytes -= n1
+            end
+        end
+        if depname[1] == '\0'
+            push!(requires, modkey => depname[2:end])
+        else
+            push!(includes, (modkey, depname, mtime))
+        end
+        totbytes -= 4 + 4 + n2 + 8
     end
     @assert totbytes == 12 "header of cache file appears to be corrupt"
     srctextpos = ntoh(read(f, Int64))
@@ -1102,7 +1122,7 @@ function parse_cache_header(f::IO)
         uuid = ntoh(read(f, UInt64)) # module UUID
         push!(required_modules, sym => uuid)
     end
-    return modules, files, required_modules, srctextpos
+    return modules, (includes, requires), required_modules, srctextpos
 end
 
 function parse_cache_header(cachefile::String)
@@ -1116,8 +1136,8 @@ function parse_cache_header(cachefile::String)
 end
 
 function cache_dependencies(f::IO)
-    defs, files, modules = parse_cache_header(f)
-    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), files)  # discard the module
+    defs, (includes, requires), modules = parse_cache_header(f)
+    return modules, map(mod_fl_mt -> (mod_fl_mt[2], mod_fl_mt[3]), includes)  # discard the module
 end
 
 function cache_dependencies(cachefile::String)
@@ -1131,10 +1151,10 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, files, required_modules, srctextpos = parse_cache_header(io)
+    modules, (includes, requires), required_modules, srctextpos = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
-    _read_dependency_src(io, filename)
+    return _read_dependency_src(io, filename)
 end
 
 function _read_dependency_src(io::IO, filename::AbstractString)
@@ -1170,32 +1190,31 @@ function stale_cachefile(modpath::String, cachefile::String)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-
-        modules, files, required_modules = parse_cache_header(io)
+        (modules, (includes, requires), required_modules) = parse_cache_header(io)
         modules = Dict{Symbol, UInt64}(modules)
 
         # Check if transitive dependencies can be fullfilled
         ndeps = length(required_modules)
         depmods = Vector{Any}(uninitialized, ndeps)
         for i in 1:ndeps
-            mod, uuid_req = required_modules[i]
+            req_uuidkey, req_uuidbuild = required_modules[i]
             # Module is already loaded
-            if root_module_exists(mod)
-                M = root_module(mod)
-                if module_name(M) === mod && module_uuid(M) === uuid_req
+            if root_module_exists(req_uuidkey)
+                M = root_module(req_uuidkey)
+                if module_name(M) === req_uuidkey && module_uuid(M) === req_uuidbuild
                     depmods[i] = M
                 else
-                    @debug "Rejecting cache file $cachefile because module $name is already loaded and incompatible."
+                    @debug "Rejecting cache file $cachefile because module $req_uuidkey is already loaded and incompatible."
                     return true # Won't be able to fulfill dependency
                 end
             else
-                name = string(mod)
+                name = string(req_uuidkey)
                 path, _ = find_package(name)
                 if path === nothing
-                    @debug "Rejecting cache file $cachefile because dependency $name not found."
+                    @debug "Rejecting cache file $cachefile because dependency $req_uuidkey not found."
                     return true # Won't be able to fulfill dependency
                 end
-                depmods[i] = (String(path), mod, uuid_req)
+                depmods[i] = (String(path), req_uuidkey, req_uuidbuild)
             end
         end
 
@@ -1203,25 +1222,28 @@ function stale_cachefile(modpath::String, cachefile::String)
         # or if it provides a version that conflicts with our concrete dependencies
         # or neither
         skip_timecheck = false
-        for (mod, uuid_req) in _concrete_dependencies
-            uuid = get(modules, mod, UInt64(0))
-            if uuid !== UInt64(0)
-                if uuid === uuid_req
+        for (req_uuidkey, req_uuidbuild) in _concrete_dependencies
+            builduuid = get(modules, req_uuidkey, UInt64(0))
+            if builduuid !== UInt64(0)
+                if builduuid === req_uuidbuild
                     skip_timecheck = true
                     break
                 end
-                @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $uuid) for $mod (want $uuid_req)"
+                @debug "Rejecting cache file $cachefile because it provides the wrong uuid (got $builduuid) for $mod (want $req_uuidbuild)"
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end
 
         # now check if this file is fresh relative to its source files
         if !skip_timecheck
-            if !samefile(files[1][2], modpath)
-                @debug "Rejecting cache file $cachefile because it is for file $(files[1][2])) not file $modpath"
+            if !samefile(includes[1][2], modpath)
+                @debug "Rejecting cache file $cachefile because it is for file $(includes[1][2])) not file $modpath"
                 return true # cache file was compiled from a different path
             end
-            for (_, f, ftime_req) in files
+            for (modkey, req_modkey) in requires
+                # TODO: verify `require(modkey, name(req_modkey))` ==> `req_modkey`
+            end
+            for (_, f, ftime_req) in includes
                 # Issue #13606: compensate for Docker images rounding mtimes
                 # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
                 ftime = mtime(f)
@@ -1229,8 +1251,6 @@ function stale_cachefile(modpath::String, cachefile::String)
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
                 end
-            end
-                return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
                 # TODO: verify `require(modkey, name(req_modkey))` ==> `req_modkey`
