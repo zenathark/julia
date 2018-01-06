@@ -396,7 +396,7 @@ function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,true))
             end
         else
             if itr.overlap
-                if !isempty(mat)
+                if !isempty(mat.match)
                     offset = nextind(itr.string, mat.offset)
                 else
                     offset = mat.offset
@@ -404,7 +404,7 @@ function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,true))
             else
                 offset = mat.offset + endof(mat.match)
             end
-            return (mat, (new_offset, isempty(mat)))
+            return (mat, (offset, isempty(mat.match)))
         end
     end
     nothing
