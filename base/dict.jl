@@ -687,7 +687,7 @@ function skip_deleted(h::Dict, i)
     return i
 end
 
-@propagate_inbounds _iterate(t::Dict, i) = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
+@propagate_inbounds _iterate(t::Dict{K,V}, i) where {K,V} = i > length(t.vals) ? nothing : (Pair{K,V}(t.keys[i],t.vals[i]), i+1)
 @propagate_inbounds function iterate(t::Dict)
     i = skip_deleted(t, t.idxfloor)
     t.idxfloor = i
@@ -699,7 +699,7 @@ isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
 @propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
-                                     i=t.idxfloor)
+                                     i=v.dict.idxfloor)
     i = skip_deleted(v.dict, i)
     (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
 end
@@ -770,7 +770,7 @@ function get(dict::ImmutableDict, key, default)
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)
-function iterate(d::ImmutableDict{K,V}, t=d)
+function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :key) && return nothing
     (Pair{K,V}(t.key, t.value), t.parent)
 end
