@@ -2298,11 +2298,6 @@ function precise_container_type(@nospecialize(arg), @nospecialize(typ), vtypes::
     end
 end
 
-strip_iter_union(X::Type{Union{Nothing, T}}) where {T} = T
-strip_iter_union(::Type{Nothing}) = Nothing
-strip_iter_union(::Type{Union{}}) = Union{}
-strip_iter_union(T) = T
-
 # simulate iteration protocol on container type up to fixpoint
 function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::InferenceState)
     tm = _topmod(sv)
@@ -2318,7 +2313,7 @@ function abstract_iteration(@nospecialize(itertype), vtypes::VarTable, sv::Infer
     valtype = statetype = Bottom
     while valtype !== Any
         stateordonet = widenconst(stateordonet)
-        nounion = strip_iter_union(stateordonet)
+        nounion = Nothing <: stateordonet ? typesubtract(stateordonet, Nothing) : stateordonet
         if !isa(nounion, DataType) || !(nounion <: Tuple) || isvatuple(nounion) || length(nounion.parameters) != 2
             return Vararg{Any}
         end
@@ -3525,8 +3520,8 @@ function typeinf_work(frame::InferenceState)
             local pc´::Int = pc + 1 # next program-counter (after executing instruction)
             if pc == frame.pc´´
                 # need to update pc´´ to point at the new lowest instruction in W
-                min_pc = next(W, pc)[2]
-                if done(W, min_pc)
+                min_pc = iterate(W, pc)[2]
+                if iterate(W, min_pc) == nothing
                     frame.pc´´ = max(min_pc, n + 1)
                 else
                     frame.pc´´ = min_pc

@@ -836,13 +836,10 @@ function eachline(filename::AbstractString; chomp::Bool=true)
     EachLine(s, ondone=()->close(s), chomp=chomp)::EachLine
 end
 
-start(itr::EachLine) = nothing
-function done(itr::EachLine, ::Nothing)
-    eof(itr.stream) || return false
-    itr.ondone()
-    true
+function iterate(itr::EachLine, state=nothing)
+    eof(itr.stream) && return (itr.ondone(); nothing)
+    (readline(itr.stream, chomp=itr.chomp), nothing)
 end
-next(itr::EachLine, ::Nothing) = (readline(itr.stream, chomp=itr.chomp), nothing)
 
 eltype(::Type{EachLine}) = String
 

@@ -34,9 +34,7 @@ _setindex(v, i::Integer) = ()
 
 ## iterating ##
 
-start(t::Tuple) = 1
-done(t::Tuple, i::Int=1) = (length(t) < i)
-next(t::Tuple, i::Int) = (t[i], i+1)
+iterate(t::Tuple, i::Int=1) = length(t) < i ? nothing : (t[i], i+1)
 
 keys(t::Tuple) = 1:length(t)
 
@@ -55,8 +53,8 @@ end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
 # while reducing to plain next() for arbitrary iterables.
-indexed_iterate(t::Tuple, i::Int, state=start(t)) = (t[i], i+1)
-indexed_iterate(a::Array, i::Int, state=start(a)) = (a[i], i+1)
+indexed_iterate(t::Tuple, i::Int, state=1) = (t[i], i+1)
+indexed_iterate(a::Array, i::Int, state=1) = (a[i], i+1)
 function indexed_iterate(I, i)
     x = iterate(I)
     x == nothing && throw(BoundsError(I, i))
