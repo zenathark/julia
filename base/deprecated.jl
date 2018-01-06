@@ -1138,6 +1138,10 @@ import .Random: srand
 @deprecate srand(filename::AbstractString, n::Integer=4) srand(read!(filename, Vector{UInt32}(uninitialized, Int(n))))
 @deprecate MersenneTwister(filename::AbstractString)  srand(MersenneTwister(0), read!(filename, Vector{UInt32}(uninitialized, Int(4))))
 
+# PR #25429
+@deprecate rand(r::AbstractRNG, dims::Dims) rand(r, Float64, dims)
+@deprecate rand(                dims::Dims) rand(Float64, dims)
+
 # PR #21974
 @deprecate versioninfo(verbose::Bool) versioninfo(verbose=verbose)
 @deprecate versioninfo(io::IO, verbose::Bool) versioninfo(io, verbose=verbose)

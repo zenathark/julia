@@ -915,6 +915,9 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
 
+  * `rand(t::Tuple{Vararg{Int}})` is deprecated in favor of `rand(Float64, t)` or `rand(t...)`;
+    `rand(::Tuple)` will have another meaning in the future ([#25429], [#25278]).
+
 Command-line option changes
 ---------------------------
 
