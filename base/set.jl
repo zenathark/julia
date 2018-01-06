@@ -50,10 +50,7 @@ pop!(s::Set, x, deflt) = x in s ? pop!(s, x) : deflt
 
 function pop!(s::Set)
     isempty(s) && throw(ArgumentError("set must be non-empty"))
-    idx = start(s.dict)
-    val = s.dict.keys[idx]
-    _delete!(s.dict, idx)
-    val
+    pop!(s.dict)[1]
 end
 
 delete!(s::Set, x) = (delete!(s.dict, x); s)

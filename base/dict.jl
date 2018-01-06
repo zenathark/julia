@@ -635,7 +635,7 @@ end
 
 function pop!(h::Dict)
     isempty(h) && throw(ArgumentError("dict must be non-empty"))
-    idx = start(h)
+    idx = skip_deleted(h, h.idxfloor)
     @inbounds key = h.keys[idx]
     @inbounds val = h.vals[idx]
     _delete!(h, idx)
@@ -701,6 +701,7 @@ length(t::Dict) = t.count
 @propagate_inbounds function iterate(v::Union{KeySet{<:Any, <:Dict}, ValueIterator{<:Dict}},
                                      i=v.dict.idxfloor)
     i = skip_deleted(v.dict, i)
+    i > length(v.dict.vals) && return nothing
     (v isa KeySet ? v.dict.keys[i] : v.dict.vals[i], i+1)
 end
 
