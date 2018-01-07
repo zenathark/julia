@@ -655,12 +655,13 @@ function copyto!(dest::AbstractArray, dstart::Integer, src, sstart::Integer, n::
             throw(ArgumentError(string("source has fewer elements than required, ",
                                        "expected at least ",sstart,", got ",j-1)))
         end
-        y = iterate(src)
+        y = iterate(src, y[2])
     end
     i = Int(dstart)
     while i <= dmax && y !== nothing
         val, st = y
         @inbounds dest[i] = val
+        y = iterate(src, st)
         i += 1
     end
     i <= dmax && throw(BoundsError(dest, i))

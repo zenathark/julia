@@ -380,7 +380,7 @@ compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
 IteratorSize(::Type{RegexMatchIterator}) = SizeUnknown()
 
-function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,true))
+function iterate(itr::RegexMatchIterator, (offset,prevempty)=(1,false))
     opts_nonempty = UInt32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
     while true
         mat = match(itr.regex, itr.string, offset,
