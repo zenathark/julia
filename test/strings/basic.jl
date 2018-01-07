@@ -463,9 +463,7 @@ mutable struct CharStr <: AbstractString
     chars::Vector{Char}
     CharStr(x) = new(collect(x))
 end
-Base.start(x::CharStr) = start(x.chars)
-Base.next(x::CharStr, i::Int) = next(x.chars, i)
-Base.done(x::CharStr, i::Int) = done(x.chars, i)
+Base.iterate(x::CharStr, i...) = iterate(x.chars, i...)
 Base.endof(x::CharStr) = endof(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters

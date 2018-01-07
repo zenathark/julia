@@ -211,7 +211,8 @@ function process_batch_errors!(p, f, results, on_error, retry_delays, retry_chec
     if length(reprocess) > 0
         errors = [x[2] for x in reprocess]
         exceptions = [x.ex for x in errors]
-        state = start(retry_delays)
+        state = iterate(retry_delays)
+        state != nothing && (state = state[2])
         if (length(retry_delays) > 0) &&
                 (retry_check==nothing || all([retry_check(state,ex)[2] for ex in exceptions]))
             # BatchProcessingError.data is a tuple of original args

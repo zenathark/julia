@@ -255,15 +255,17 @@ julia> cmp("b", "β")
 """
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
-    i = start(a)
-    j = start(b)
-    while !done(a, i)
-        done(b, j) && return 1
-        c, i = next(a, i)
-        d, j = next(b, j)
+    ay = iterate(a)
+    by = iterate(b)
+    while true
+        (ay == nothing && by == nothing) && return 0
+        ay == nothing && return -1
+        by == nothing && return 1
+        c, d = ay[1], by[1]
         c ≠ d && return ifelse(c < d, -1, 1)
+        ay = iterate(a, ay[2])
+        by = iterate(b, by[2])
     end
-    return ifelse(done(b, j), 0, -1)
 end
 
 """
