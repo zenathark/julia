@@ -1247,14 +1247,15 @@ function normalize_keys(keymap::Dict)
 end
 
 function add_nested_key!(keymap::Dict, key, value; override = false)
-    i = start(key)
-    while !done(key, i)
-        c, i = next(key, i)
-        if !override && c in keys(keymap) && (done(key, i) || !isa(keymap[c], Dict))
+    y = iterate(key)
+    while y !== nothing
+        c, i = y
+        y = iterate(key, i)
+        if !override && c in keys(keymap) && (y == nothing || !isa(keymap[c], Dict))
             error("Conflicting definitions for keyseq " * escape_string(key) *
                   " within one keymap")
         end
-        if done(key, i)
+        if y == nothing
             keymap[c] = value
             break
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))

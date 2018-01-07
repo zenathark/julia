@@ -790,7 +790,7 @@ arg_gen(x::AbstractString) = String[cstr(x)]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
-    if applicable(start, head)
+    if isiterable(typeof(head))
         vals = String[]
         for x in head
             push!(vals, cstr(string(x)))

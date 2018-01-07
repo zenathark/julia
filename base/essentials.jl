@@ -765,10 +765,39 @@ Indicate whether `x` is [`missing`](@ref).
 ismissing(::Any) = false
 ismissing(::Missing) = true
 
+"""
+    @__LINE__ -> Int
+
+`@__LINE__` expands to the line number of the location of the macrocall.
+Returns `0` if the line number could not be determined.
+"""
+macro __LINE__()
+    return __source__.line
+end
+
+# Just for bootstrapping purposes below
+macro __FILE_SYMBOL__()
+    return Expr(:quote, __source__.file)
+end
+
 # Iteration
+# Compatibility with old iteration protocol
 function iterate(x, state)
     @_inline_meta
     done(x, state) && return nothing
     return next(x, state)
 end
+const old_iterate_line_prev = (@__LINE__)
 iterate(x) = (@_inline_meta; iterate(x, start(x)))
+
+# This is necessary to support the above compatibility layer,
+# eventually, this should just check for applicability of `iterate`
+function isiterable(T)::Bool
+    world = ccall(:jl_get_world_counter, UInt, ())
+    mt = Base._methods(iterate, Tuple{T}, -1, world)
+    # Check if this is the above method
+    if (mt[1][3].file == @__FILE_SYMBOL__) && (mt[1][3].line == old_iterate_line_prev + 1)
+        return length(Base._methods(start, Tuple{T}, -1, world)) != 0
+    end
+    return true
+end
