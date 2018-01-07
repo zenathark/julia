@@ -553,8 +553,9 @@ end
     n = s[1]
     n > length(L) && return nothing
     while true
-        idx, i = iterate(tail(s))
-        L.mask[idx] && return (idx, (n+1, s[2], i))
+        idx, i = iterate(tail(s)...)
+        s = (n+1, s[2], i)
+        L.mask[idx] && return (idx, s)
     end
 end
 # When wrapping a BitArray, lean heavily upon its internals -- this is a common

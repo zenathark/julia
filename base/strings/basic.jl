@@ -650,9 +650,7 @@ size(s::CodeUnits) = (length(s),)
 strides(s::CodeUnits) = (1,)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-start(s::CodeUnits) = 1
-next(s::CodeUnits, i) = (@_propagate_inbounds_meta; (s[i], i+1))
-done(s::CodeUnits, i) = (@_inline_meta; i == length(s)+1)
+iterate(s::CodeUnits, i=1) = (@_propagate_inbounds_meta; i == length(s)+1 ? nothing : (s[i], i+1))
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 

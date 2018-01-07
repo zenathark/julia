@@ -876,7 +876,6 @@ end
 end
 
 @testset "LinSpace ops" begin
-    @test start(LinSpace(0,3,4)) == 1
     @test 2*LinSpace(0,3,4) == LinSpace(0,6,4)
     @test LinSpace(0,3,4)*2 == LinSpace(0,6,4)
     @test LinSpace(0,3,4)/3 == LinSpace(0,1,4)

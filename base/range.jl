@@ -462,7 +462,7 @@ function iterate(r::StepRange{T}, i=oftype(r.start + r.step, r.start)) where {T}
     (convert(T,i), i+r.step)
 end
 
-iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : unsafe_getindex(r, i), i+1
+iterate(r::StepRangeLen{T}, i=1) where {T} = i > length(r) ? nothing : (unsafe_getindex(r, i), i+1)
 
 function iterate(r::AbstractUnitRange{T}, i) where {T}
     i == oftype(i, r.stop) + oneunit(T) && return nothing
@@ -605,7 +605,6 @@ function ==(r::AbstractRange, s::AbstractRange)
     if lr != length(s)
         return false
     end
-    u, v = start(r), start(s)
     yr, ys = iterate(r), iterate(s)
     while yr !== nothing
         yr[1] == ys[1] || return false
