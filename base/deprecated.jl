@@ -2781,7 +2781,7 @@ end
     @deprecate At_mul_Bt(D::Diagonal, B::Diagonal)      (*)(Transpose(D), Transpose(B))
     function A_mul_B!(A::Diagonal,B::Diagonal)
         depwarn("`A_mul_B!(A::Diagonal,B::Diagonal)` should be replaced with `mul1!(A, B)` or `mul2!(A, B)`.", :A_mul_B!)
-        throw(MethodError(A_mul_B!, Tuple{Diagonal,Diagonal}))
+        throw(MethodError(A_mul_B!, (A, B)))
     end
     @deprecate At_mul_B!(A::Diagonal,B::Diagonal)       mul2!(Transpose(A), B)
     @deprecate Ac_mul_B!(A::Diagonal,B::Diagonal)       mul2!(Adjoint(A), B)
@@ -3062,10 +3062,10 @@ end
     @deprecate Ac_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)     mul2!(Adjoint(A), B)
     @deprecate At_mul_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)     mul2!(Transpose(A), B)
     @deprecate At_mul_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)     mul2!(Transpose(A), B)
-    @deprecate Ac_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)    ldiv1!(Adjoint(A), B)
-    @deprecate Ac_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)    ldiv1!(Adjoint(A), B)
-    @deprecate At_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)    ldiv1!(Transpose(A), B)
-    @deprecate At_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)    ldiv1!(Transpose(A), B)
+    @deprecate Ac_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)    ldiv!(Adjoint(A), B)
+    @deprecate Ac_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)    ldiv!(Adjoint(A), B)
+    @deprecate At_ldiv_B!(A::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)    ldiv!(Transpose(A), B)
+    @deprecate At_ldiv_B!(A::Union{UpperTriangular,UnitUpperTriangular}, B::LowerTriangular)    ldiv!(Transpose(A), B)
     @deprecate A_rdiv_Bt!(A::StridedMatrix, B::UnitLowerTriangular) rdiv!(A, Transpose(B))
     @deprecate A_rdiv_Bt!(A::StridedMatrix, B::LowerTriangular)     rdiv!(A, Transpose(B))
     @deprecate A_rdiv_Bt!(A::StridedMatrix, B::UnitUpperTriangular) rdiv!(A, Transpose(B))
@@ -3181,7 +3181,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
 
         # Matrix multiplication
         @deprecate A_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}     mul2!(A, B)
-        @deprecate A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}     mul2!(A, B)
+        @deprecate A_mul_B!(A::StridedMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat}     mul1!(A, B)
 
         @deprecate At_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasFloat}       mul2!(Transpose(A), B)
         @deprecate Ac_mul_B!(A::$t{T,<:StridedMatrix}, B::StridedMatrix{T}) where {T<:BlasComplex}     mul2!(Adjoint(A), B)
@@ -3827,11 +3827,10 @@ end
 
 @deprecate substrides(s, parent, dim, I::Tuple) substrides(parent, strides(parent), I)
 
-
-@deprecate *(A::Factorization, B::Factorization) Matrix(A)*Matrix(B)
-@deprecate *(A::Adjoint{<:Any,<:Factorization}, B::Factorization) adjoint(Matrix(A.parent)) * Matrix(B)
-@deprecate *(A::Factorization, B::Adjoint{<:Any,<:Factorization}) Matrix(A) * adjoint(Matrix(B.parent))
-
+@deprecate *(A::LQ,B::QR) A*Matrix(B)
+@deprecate *(A::QR,B::LQ) A*Matrix(B)
+@deprecate *(A::Adjoint{<:Any,<:LQ}, B::LQ) A*Matrix(B)
+@deprecate *(A::LQ, B::Adjoint{<:Any,<:LQ}) A*Matrix(B)
 
 # END 0.7 deprecations
 
