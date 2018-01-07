@@ -118,7 +118,7 @@ function Base.map(f::Function, walker::GitRevWalker;
 
     c = 0
     repo = repository(walker)
-    for val in take(walker, count)
+    for val in Iterators.take(walker, count)
         push!(res, f(val, repo))
     end
     return res
