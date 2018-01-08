@@ -138,7 +138,7 @@ version_slug(uuid::UUID, sha1::SHA1) = joinpath(slug(uuid), slug(sha1))
 
 ## finding packages ##
 
-const uuid_sym = Symbol("#uuid")
+const uuid_sym = Symbol("##uuid")
 
 const project_names = ["JuliaProject.toml", "Project.toml"]
 const manifest_names = ["JuliaManifest.toml", "Manifest.toml"]

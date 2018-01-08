@@ -166,7 +166,7 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     jl_value_t *defaultdefs = NULL, *form = NULL;
     JL_GC_PUSH4(&last_module, &defaultdefs, &form, &newm);
     // copy parent environment info into submodule
-    jl_sym_t *uuid_sym = jl_symbol("#uuid");
+    jl_sym_t *uuid_sym = jl_symbol("##uuid");
     jl_value_t *uuid = jl_get_global(parent_module, uuid_sym);
     if (uuid && uuid != jl_nothing)
         jl_set_const(newm, uuid_sym, uuid);
