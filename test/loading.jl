@@ -89,7 +89,7 @@ import Base.Random: UUID
     local path
     for (names, path, uuid) in [
         ("Foo",     "Foo1/src/Foo.jl",    "767738be-2f1f-45a9-b806-0234f3164144"),
-        ("Bar.Foo", "Foo2.jl/src/Foo.jl", "6f418443-bd2e-4783-b551-cdbac608adf2"),
+        ("Bar.Fuu", "Foo2.jl/src/Fuu.jl", "6f418443-bd2e-4783-b551-cdbac608adf2"),
         ("Bar",     "Bar/src/Bar.jl",     "2a550a13-6bab-4a91-a4ee-dff34d6b99d0"),
         ("Foo.Baz", "Baz.jl/src/Baz.jl",  "6801f525-dc68-44e8-a4e8-cabd286279e7"),
         ("Foo.Qux", "Qux.jl",             "b5ec9b9c-e354-47fd-b367-a348bdc8f909"),
@@ -97,15 +97,16 @@ import Base.Random: UUID
         p = abspath("project", "deps", normpath(path))
         @test Base.find_package(map(String, split(names, '.'))...) == (p, UUID(uuid))
     end
+    @test Base.find_package("Fuu") == (nothing, nothing)
     @test Base.find_package("Baz") == (nothing, nothing)
     @test Base.find_package("Qux") == (nothing, nothing)
     @testset "equivalent package names" begin
         local classes = [
             ["Foo", "Foo.Baz.Foo", "Bar.Baz.Foo"],
-            ["Bar.Foo", "Foo.Qux.Foo"],
+            ["Bar.Fuu", "Foo.Qux.Fuu"],
             ["Bar", "Foo.Bar"],
             ["Foo.Baz", "Bar.Baz"],
-            ["Foo.Qux", "Bar.Foo.Qux", "Bar.Baz.Qux"],
+            ["Foo.Qux", "Bar.Fuu.Qux", "Bar.Baz.Qux"],
             ["Baz", "Qux", "Foo.Foo", "Bar.Qux", "Foo.Baz.Bar", "Foo.Qux.Bar", "Foo.Qux.Baz"],
         ]
         for i = 1:length(classes)

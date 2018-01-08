@@ -1,5 +1,5 @@
 __precompile__(true)
-module Foo
+module Fuu
 import Qux
 this = "Foo2"
 end
