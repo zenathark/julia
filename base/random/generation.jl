@@ -416,12 +416,12 @@ Sampler(rng::AbstractRNG, str::AbstractString, n::Val{Inf}) = Sampler(rng, colle
 # when generating only one char from a string, the specialized method below
 # is usually more efficient
 Sampler(rng::AbstractRNG, str::AbstractString, ::Val{1}) =
-    SamplerSimple(str, Sampler(rng, 1:_endof(str), Val(Inf)))
+    SamplerSimple(str, Sampler(rng, 1:_endindex(str), Val(Inf)))
 
 isvalid_unsafe(s::String, i) = !Base.is_valid_continuation(Base.@gc_preserve s unsafe_load(pointer(s), i))
 isvalid_unsafe(s::AbstractString, i) = isvalid(s, i)
-_endof(s::String) = sizeof(s)
-_endof(s::AbstractString) = endof(s)
+_endindex(s::String) = sizeof(s)
+_endindex(s::AbstractString) = endindex(s)
 
 function rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractString,<:Sampler})::Char
     str = sp[]

@@ -1512,7 +1512,7 @@ julia> findnext(A, 3)
 ```
 """
 function findnext(A, start::Integer)
-    l = endof(A)
+    l = endindex(A)
     i = start
     warned = false
     while i <= l
@@ -1572,7 +1572,7 @@ julia> findnext(isodd, A, 2)
 ```
 """
 function findnext(testf::Function, A, start::Integer)
-    l = endof(A)
+    l = endindex(A)
     i = start
     while i <= l
         if testf(A[i])
@@ -1664,7 +1664,7 @@ julia> findlast(A)
 0
 ```
 """
-findlast(A) = findprev(A, endof(A))
+findlast(A) = findprev(A, endindex(A))
 
 """
     findprev(predicate::Function, A, i::Integer)
@@ -1715,7 +1715,7 @@ julia> findlast(x -> x > 5, A)
 0
 ```
 """
-findlast(testf::Function, A) = findprev(testf, A, endof(A))
+findlast(testf::Function, A) = findprev(testf, A, endindex(A))
 
 """
     find(f::Function, A)

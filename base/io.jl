@@ -648,14 +648,14 @@ function readuntil(s::IO, delim::T) where T
     return out
 end
 
-# requires that indices for target are small ordered integers bounded by start and endof
+# requires that indices for target are small ordered integers bounded by start and endindex
 function readuntil_indexable(io::IO, target#=::Indexable{T}=#, out)
     T = eltype(target)
     first = start(target)
     if done(target, first)
         return
     end
-    len = endof(target)
+    len = endindex(target)
     local cache # will be lazy initialized when needed
     second = next(target, first)[2]
     max_pos = second

@@ -23,7 +23,8 @@ config(md::MD) = md.meta[:config]::Config
 Base.push!(md::MD, x) = push!(md.content, x)
 Base.getindex(md::MD, args...) = md.content[args...]
 Base.setindex!(md::MD, args...) = setindex!(md.content, args...)
-Base.endof(md::MD) = endof(md.content)
+Base.endindex(md::MD) = endindex(md.content)
+Base.beginindex(md::MD) = beginindex(md.content)
 Base.length(md::MD) = length(md.content)
 Base.isempty(md::MD) = isempty(md.content)
 

@@ -43,6 +43,9 @@ New language features
   * Values for `Enum`s can now be specified inside of a `begin` block when using the
     `@enum` macro ([#25424]).
 
+  * `a[begin]` can now be used to address the first element of an integer-indexed collection `a`.
+    The index is computed by `beginindex(a)` ([#23554]).
+
 Language changes
 ----------------
 
@@ -918,6 +921,8 @@ Deprecated or removed
 
   * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
 
+  * `endof(a)` has been renamed `endindex(a)` ([#23554]).
+
 Command-line option changes
 ---------------------------
 
@@ -1074,6 +1079,7 @@ Command-line option changes
 [#23323]: https://github.com/JuliaLang/julia/issues/23323
 [#23341]: https://github.com/JuliaLang/julia/issues/23341
 [#23342]: https://github.com/JuliaLang/julia/issues/23342
+[#23354]: https://github.com/JuliaLang/julia/issues/23354
 [#23366]: https://github.com/JuliaLang/julia/issues/23366
 [#23373]: https://github.com/JuliaLang/julia/issues/23373
 [#23404]: https://github.com/JuliaLang/julia/issues/23404

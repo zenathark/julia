@@ -164,11 +164,11 @@ end
 let
     srep = repeat("Σβ",2)
     s="Σβ"
-    ss=SubString(s,1,endof(s))
+    ss=SubString(s,1,endindex(s))
 
     @test repeat(ss,2) == "ΣβΣβ"
 
-    @test endof(srep) == 7
+    @test endindex(srep) == 7
 
     @test next(srep, 3) == ('β',5)
     @test next(srep, 7) == ('β',9)
@@ -215,7 +215,7 @@ end
     @test_throws MethodError isvalid(tstr, true)
     @test_throws MethodError next(tstr, 1)
     @test_throws MethodError next(tstr, true)
-    @test_throws MethodError endof(tstr)
+    @test_throws MethodError endindex(tstr)
 
     gstr = GenericString("12")
     @test string(gstr) isa GenericString
@@ -442,9 +442,9 @@ end
     @test_throws ArgumentError ascii("Hello, ∀")
     @test_throws ArgumentError ascii(GenericString("Hello, ∀"))
 end
-@testset "issue #17271: endof() doesn't throw an error even with invalid strings" begin
-    @test endof("\x90") == 1
-    @test endof("\xce") == 1
+@testset "issue #17271: endindex() doesn't throw an error even with invalid strings" begin
+    @test endindex("\x90") == 1
+    @test endindex("\xce") == 1
 end
 # issue #17624, missing getindex method for String
 @test "abc"[:] == "abc"
@@ -452,8 +452,8 @@ end
 @testset "issue #18280: next/nextind must return past String's underlying data" begin
     for s in ("Hello", "Σ", "こんにちは", "😊😁")
         local s
-        @test next(s, endof(s))[2] > sizeof(s)
-        @test nextind(s, endof(s)) > sizeof(s)
+        @test next(s, endindex(s))[2] > sizeof(s)
+        @test nextind(s, endindex(s)) > sizeof(s)
     end
 end
 # Test cmp with AbstractStrings that don't index the same as UTF-8, which would include
@@ -466,7 +466,7 @@ end
 Base.start(x::CharStr) = start(x.chars)
 Base.next(x::CharStr, i::Int) = next(x.chars, i)
 Base.done(x::CharStr, i::Int) = done(x.chars, i)
-Base.endof(x::CharStr) = endof(x.chars)
+Base.endindex(x::CharStr) = endindex(x.chars)
 @testset "cmp without UTF-8 indexing" begin
     # Simple case, with just ANSI Latin 1 characters
     @test "áB" != CharStr("áá") # returns false with bug

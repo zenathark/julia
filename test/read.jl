@@ -163,7 +163,7 @@ for (name, f) in l
             ("barbarbarians", "barbarian", "barbarbarian")]
         local t, s, m
         @test readuntil(io(t), s) == m
-        @test readuntil(io(t), SubString(s, start(s), endof(s))) == m
+        @test readuntil(io(t), SubString(s, start(s), endindex(s))) == m
         @test readuntil(io(t), GenericString(s)) == m
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
         @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)

@@ -51,7 +51,7 @@ are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
 See also: [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
-[`length`](@ref), [`endof`](@ref)
+[`length`](@ref), [`endindex`](@ref)
 """
 ncodeunits(s::AbstractString)
 
@@ -142,7 +142,8 @@ start(s::AbstractString) = 1
 done(s::AbstractString, i::Integer) = i > ncodeunits(s)
 eltype(::Type{<:AbstractString}) = Char
 sizeof(s::AbstractString) = ncodeunits(s) * sizeof(codeunit(s))
-endof(s::AbstractString) = thisind(s, ncodeunits(s))
+beginindex(s::AbstractString) = 1
+endindex(s::AbstractString) = thisind(s, ncodeunits(s))
 
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
@@ -324,7 +325,7 @@ indices in the string `s`. In addition to in-bounds values, `i` may take the
 out-of-bounds value `ncodeunits(s) + 1` and `j` may take the out-of-bounds
 value `0`.
 
-See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endof`](@ref),
+See also: [`isvalid`](@ref), [`ncodeunits`](@ref), [`endindex`](@ref),
 [`thisind`](@ref), [`nextind`](@ref), [`prevind`](@ref)
 
 # Examples
@@ -450,7 +451,7 @@ julia> nextind(str, 1)
 julia> nextind(str, 1, 2)
 5
 
-julia> endof(str)
+julia> endindex(str)
 9
 
 julia> nextind(str, 9)
@@ -512,7 +513,7 @@ isascii(s::AbstractString) = all(isascii, s)
 ## string map, filter, has ##
 
 function map(f, s::AbstractString)
-    out = IOBuffer(StringVector(endof(s)), true, true)
+    out = IOBuffer(StringVector(endindex(s)), true, true)
     truncate(out, 0)
     for c in s
         c′ = f(c)
@@ -525,7 +526,7 @@ function map(f, s::AbstractString)
 end
 
 function filter(f, s::AbstractString)
-    out = IOBuffer(StringVector(endof(s)), true, true)
+    out = IOBuffer(StringVector(endindex(s)), true, true)
     truncate(out, 0)
     for c in s
         f(c) && write(out, c)
@@ -622,10 +623,10 @@ julia> "Test "^3
 (^)(s::Union{AbstractString,Char}, r::Integer) = repeat(s, r)
 
 # reverse-order iteration for strings and indices thereof
-start(r::Iterators.Reverse{<:AbstractString}) = endof(r.itr)
+start(r::Iterators.Reverse{<:AbstractString}) = endindex(r.itr)
 done(r::Iterators.Reverse{<:AbstractString}, i) = i < start(r.itr)
 next(r::Iterators.Reverse{<:AbstractString}, i) = (r.itr[i], prevind(r.itr, i))
-start(r::Iterators.Reverse{<:EachStringIndex}) = endof(r.itr.s)
+start(r::Iterators.Reverse{<:EachStringIndex}) = endindex(r.itr.s)
 done(r::Iterators.Reverse{<:EachStringIndex}, i) = i < start(r.itr.s)
 next(r::Iterators.Reverse{<:EachStringIndex}, i) = (i, prevind(r.itr.s, i))
 

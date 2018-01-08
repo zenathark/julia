@@ -118,7 +118,7 @@ function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,Char,Int8,UInt8},
                       i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? i :
+        return 1 <= i <= nextind(s,endindex(s)) ? i :
                throw(BoundsError(s, i))
     end
     t1, j2 = next(t,start(t))
@@ -158,7 +158,7 @@ _nthbyte(a::Union{AbstractVector{UInt8},AbstractVector{Int8}}, i) = a[i]
 
 function _searchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    endof(t) == 1 && return findnext(equalto(t[1]), s, i)
+    endindex(t) == 1 && return findnext(equalto(t[1]), s, i)
     _searchindex(unsafe_wrap(Vector{UInt8},s), unsafe_wrap(Vector{UInt8},t), i)
 end
 
@@ -230,7 +230,7 @@ function _search(s::Union{AbstractString,ByteArray},
     if isempty(t)
         idx:idx-1
     else
-        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+        idx:(idx > 0 ? idx + endindex(t) - 1 : -1)
     end
 end
 
@@ -267,7 +267,7 @@ findnext(t::AbstractString, s::AbstractString, i::Integer) = _search(s, t, i)
     findlast(pattern::Regex, string::String)
 
 Find the last occurrence of `pattern` in `string`. Equivalent to
-[`findlast(pattern, string, endof(s))`](@ref).
+[`findlast(pattern, string, endindex(s))`](@ref).
 
 # Examples
 ```jldoctest
@@ -279,7 +279,7 @@ julia> findfirst("Julia", "JuliaLang")
 ```
 """
 findlast(pattern::AbstractString, string::AbstractString) =
-    findprev(pattern, string, endof(string))
+    findprev(pattern, string, endindex(string))
 
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
@@ -301,12 +301,12 @@ function _rsearchindex(s::AbstractString,
                        t::Union{AbstractString,Char,Int8,UInt8},
                        i::Integer)
     if isempty(t)
-        return 1 <= i <= nextind(s, endof(s)) ? i :
+        return 1 <= i <= nextind(s, endindex(s)) ? i :
                throw(BoundsError(s, i))
     end
     t = t isa AbstractString ? reverse(t) : t
     rs = reverse(s)
-    l = endof(s)
+    l = endindex(s)
     t1, j2 = next(t, start(t))
     while true
         i = findprev(equalto(t1), s, i)
@@ -333,9 +333,9 @@ end
 
 function _rsearchindex(s::String, t::String, i::Integer)
     # Check for fast case of a single byte
-    if endof(t) == 1
+    if endindex(t) == 1
         return findprev(equalto(t[1]), s, i)
-    elseif endof(t) != 0
+    elseif endindex(t) != 0
         j = i ≤ ncodeunits(s) ? nextind(s, i)-1 : i
         return _rsearchindex(unsafe_wrap(Vector{UInt8}, s), unsafe_wrap(Vector{UInt8}, t), j)
     elseif i > sizeof(s)
@@ -415,7 +415,7 @@ function _rsearch(s::Union{AbstractString,ByteArray},
     if isempty(t)
         idx:idx-1
     else
-        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+        idx:(idx > 0 ? idx + endindex(t) - 1 : -1)
     end
 end
 

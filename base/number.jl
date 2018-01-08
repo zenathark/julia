@@ -52,7 +52,8 @@ eltype(::Type{T}) where {T<:Number} = T
 ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
-endof(x::Number) = 1
+beginindex(x::Number) = 1
+endindex(x::Number) = 1
 IteratorSize(::Type{<:Number}) = HasShape()
 keys(::Number) = OneTo(1)
 

@@ -208,16 +208,16 @@ Like [`parse`](@ref), but returns either a value of the requested type,
 or [`nothing`](@ref) if the string does not contain a valid number.
 """
 tryparse(::Type{T}, s::AbstractString, base::Integer) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), false)
+    tryparse_internal(T, s, start(s), endindex(s), check_valid_base(base), false)
 tryparse(::Type{T}, s::AbstractString) where {T<:Integer} =
-    tryparse_internal(T, s, start(s), endof(s), 0, false)
+    tryparse_internal(T, s, start(s), endindex(s), 0, false)
 
 function parse(::Type{T}, s::AbstractString, base::Integer) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), check_valid_base(base), true)
+    tryparse_internal(T, s, start(s), endindex(s), check_valid_base(base), true)
 end
 
 function parse(::Type{T}, s::AbstractString) where T<:Integer
-    tryparse_internal(T, s, start(s), endof(s), 0, true) # Zero means, "figure it out"
+    tryparse_internal(T, s, start(s), endindex(s), 0, true) # Zero means, "figure it out"
 end
 
 ## string to float functions ##
@@ -331,7 +331,7 @@ tryparse_internal(T::Type{<:Complex}, s::AbstractString, i::Int, e::Int, raise::
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
-    startpos == start(s) && endpos == endof(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
+    startpos == start(s) && endpos == endindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
 function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
@@ -343,4 +343,4 @@ tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, rais
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString) where T<:Union{Real,Complex} =
-    tryparse_internal(T, s, start(s), endof(s), true)
+    tryparse_internal(T, s, start(s), endindex(s), true)

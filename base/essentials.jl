@@ -546,7 +546,8 @@ function length(v::SimpleVector)
     @_gc_preserve_end t
     return l
 end
-endof(v::SimpleVector) = length(v)
+beginindex(v::SimpleVector) = 1
+endindex(v::SimpleVector) = length(v)
 start(v::SimpleVector) = 1
 next(v::SimpleVector,i) = (v[i],i+1)
 done(v::SimpleVector,i) = (length(v) < i)
