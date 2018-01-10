@@ -426,7 +426,7 @@ typedef struct _jl_module_t {
     struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    uint64_t uuid;
+    uint64_t build_id;
     size_t primary_world;
     uint32_t counter;
     uint8_t istopmod;

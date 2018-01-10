@@ -57,7 +57,7 @@ JL_DLLEXPORT jl_module_t *jl_new_main_module(void)
     jl_main_module->parent = jl_main_module;
     if (old_main) { // don't block continued loading of incremental caches
         jl_main_module->primary_world = old_main->primary_world;
-        jl_main_module->uuid = old_main->uuid;
+        jl_main_module->build_id = old_main->build_id;
     }
     ptls->current_module = jl_main_module;
 
@@ -121,15 +121,15 @@ static void jl_module_load_time_initialize(jl_module_t *m)
     }
 }
 
-void jl_register_root_module(jl_value_t *key, jl_module_t *m)
+void jl_register_root_module(jl_value_t *uuid, jl_sym_t *name, jl_module_t *m)
 {
     static jl_value_t *register_module_func = NULL;
     assert(jl_base_module);
     if (register_module_func == NULL)
         register_module_func = jl_get_global(jl_base_module, jl_symbol("register_root_module"));
     assert(register_module_func);
-    jl_value_t *rmargs[3] = {register_module_func, key, (jl_value_t*)m};
-    jl_apply(rmargs, 3);
+    jl_value_t *args[4] = {register_module_func, uuid, (jl_value_t*)name, (jl_value_t*)m};
+    jl_apply(args, 4);
 }
 
 jl_array_t *jl_get_loaded_modules(void)
@@ -168,13 +168,13 @@ jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
     // copy parent environment info into submodule
     jl_sym_t *uuid_sym = jl_symbol("##uuid");
     jl_value_t *uuid = jl_get_global(parent_module, uuid_sym);
-    if (uuid && uuid != jl_nothing)
+    if (!uuid) uuid = jl_nothing;
+    if (uuid != jl_nothing)
         jl_set_const(newm, uuid_sym, uuid);
     if (jl_base_module &&
         (jl_value_t*)parent_module == jl_get_global(jl_base_module, jl_symbol("__toplevel__"))) {
         newm->parent = newm;
-        // TODO: pass through correct key somehow
-        jl_register_root_module((jl_value_t*)name, newm);
+        jl_register_root_module(uuid, name, newm);
     }
     else {
         jl_binding_t *b = jl_get_binding_wr(parent_module, name, 1);

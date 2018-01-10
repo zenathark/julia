@@ -475,7 +475,7 @@ isdefined(Core, :Inference) && Docs.loaddocs(Core.Inference.CoreDocs.DOCS)
 function __init__()
     # Base library init
     reinit_stdio()
-    global_logger(root_module(:Logging).ConsoleLogger(STDERR))
+    global_logger(root_module(PkgId("Logging")).ConsoleLogger(STDERR))
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     early_init()
     init_depot_path()
@@ -511,11 +511,11 @@ Base.require(Base, :Printf)
 Base.require(Base, :Future)
 
 @eval Base begin
-    @deprecate_binding Test root_module(:Test) true ", run `using Test` instead"
-    @deprecate_binding Mmap root_module(:Mmap) true ", run `using Mmap` instead"
-    @deprecate_binding Profile root_module(:Profile) true ", run `using Profile` instead"
-    @deprecate_binding Dates root_module(:Dates) true ", run `using Dates` instead"
-    @deprecate_binding Distributed root_module(:Distributed) true ", run `using Distributed` instead"
+    @deprecate_binding Test root_module(Base, :Test) true ", run `using Test` instead"
+    @deprecate_binding Mmap root_module(Base, :Mmap) true ", run `using Mmap` instead"
+    @deprecate_binding Profile root_module(Base, :Profile) true ", run `using Profile` instead"
+    @deprecate_binding Dates root_module(Base, :Dates) true ", run `using Dates` instead"
+    @deprecate_binding Distributed root_module(Base, :Distributed) true ", run `using Distributed` instead"
 end
 
 empty!(DEPOT_PATH)

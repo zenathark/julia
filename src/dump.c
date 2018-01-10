@@ -428,7 +428,7 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
         }
     }
     write_uint8(s->s, m->istopmod);
-    write_uint64(s->s, m->uuid);
+    write_uint64(s->s, m->build_id);
     write_int32(s->s, m->counter);
 }
 
@@ -1031,7 +1031,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
             size_t l = strlen(modkey);
             write_int32(s, l);
             ios_write(s, modkey, l);
-            write_uint64(s, m->uuid);
+            write_uint64(s, m->build_id);
         }
     }
     write_int32(s, 0);
@@ -1065,7 +1065,7 @@ static void write_work_list(ios_t *s)
             size_t l = strlen(jl_symbol_name(workmod->name));
             write_int32(s, l);
             ios_write(s, jl_symbol_name(workmod->name), l);
-            write_uint64(s, workmod->uuid);
+            write_uint64(s, workmod->build_id);
         }
     }
     write_int32(s, 0);
@@ -1601,7 +1601,7 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
         i++;
     }
     m->istopmod = read_uint8(s->s);
-    m->uuid = read_uint64(s->s);
+    m->build_id = read_uint64(s->s);
     m->primary_world = jl_world_counter;
     m->counter = read_int32(s->s);
     return (jl_value_t*)m;
@@ -1948,7 +1948,7 @@ static int size_isgreater(const void *a, const void *b)
 
 static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds, jl_array_t *mod_list)
 {
-    if (!jl_main_module->uuid) {
+    if (!jl_main_module->build_id) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Main module uuid state is invalid for module deserialization.");
     }
@@ -1965,7 +1965,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds,
         uint64_t uuid = read_uint64(s);
         jl_sym_t *sym = jl_symbol_n(name, len);
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
-        if (!m || !jl_is_module(m) || m->name != sym || m->uuid != uuid) {
+        if (!m || !jl_is_module(m) || m->name != sym || m->build_id != uuid) {
             return jl_get_exceptionf(jl_errorexception_type,
                 "Invalid input in module list: expected %s.", name);
         }
