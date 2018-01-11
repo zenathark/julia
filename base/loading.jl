@@ -577,13 +577,13 @@ function find_source_file(path::AbstractString)
     return isfile(base_path) ? base_path : nothing
 end
 
-function find_all_in_cache_path(name::String)
+function find_all_in_cache_path(pkg::PkgId)
     paths = String[]
+    suffix = "$(pkg.name).ji"
+    pkg.uuid !== nothing && (suffix = joinpath(slug(pkg.uuid), suffix))
     for prefix in LOAD_CACHE_PATH
-        path = joinpath(prefix, name * ".ji")
-        if isfile_casesensitive(path)
-            push!(paths, path)
-        end
+        path = joinpath(prefix, suffix)
+        isfile_casesensitive(path) && push!(paths, path)
     end
     return paths
 end
@@ -655,7 +655,7 @@ end
 # returns `false` if the module isn't known to be precompilable
 # returns the set of modules restored if the cache load succeeded
 function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
-    paths = find_all_in_cache_path(pkg.name) # cache files for sourcepath are stored keyed by the `mod` symbol name
+    paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
         deps = stale_cachefile(sourcepath, path_to_try)
         if deps === true
@@ -1056,6 +1056,8 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
         serialize(in, quote
                   empty!(Base.LOAD_PATH)
                   append!(Base.LOAD_PATH, $LOAD_PATH)
+                  empty!(Base.DEPOT_PATH)
+                  append!(Base.DEPOT_PATH, $DEPOT_PATH)
                   empty!(Base.LOAD_CACHE_PATH)
                   append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
                   empty!(Base.DL_LOAD_PATH)
@@ -1075,9 +1077,14 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                       end)
         end
         serialize(in, :(Base.include(Base.__toplevel__, $(abspath(input)))))
+        # TODO: cleanup is probably unnecessary here
         if source !== nothing
             serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
+        uuid !== nothing && serialize(in, quote
+            ccall(:jl_set_global, Cvoid, (Any, Any, Any),
+                  Base.__toplevel__, $(Meta.quot(uuid_sym)), nothing)
+            end)
         close(in)
     catch ex
         close(in)
@@ -1109,7 +1116,9 @@ function compilecache(pkg::PkgId)
     if !isdir(cachepath)
         mkpath(cachepath)
     end
-    cachefile::String = abspath(cachepath, "$name.ji")
+    suffix = "$(pkg.name).ji"
+    pkg.uuid !== nothing && (suffix = joinpath(slug(pkg.uuid), suffix))
+    cachefile::String = abspath(cachepath, suffix)
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules
