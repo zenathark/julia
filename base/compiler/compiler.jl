@@ -1,23 +1,30 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Inference
+getfield(getfield(Main, :Core), :eval)(getfield(Main, :Core), :(baremodule Compiler
+
 using Core.Intrinsics
-import Core: print, println, show, write, unsafe_write, STDOUT, STDERR
+
+import Core: print, println, show, write, unsafe_write, STDOUT, STDERR,
+             _apply, svec, apply_type, Builtin, IntrinsicFunction, MethodInstance
 
 const getproperty = getfield
 const setproperty! = setfield!
 
-ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Inference, false)
+ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
-eval(x) = Core.eval(Inference, x)
+eval(x) = Core.eval(Compiler, x)
 eval(m, x) = Core.eval(m, x)
 
-include(x) = Core.include(Inference, x)
+include(x) = Core.include(Compiler, x)
 include(mod, x) = Core.include(mod, x)
 
 function return_type end
 
-## Load essential files and libraries
+#############
+# from Base #
+#############
+
+# essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
 include("generator.jl")
@@ -53,7 +60,7 @@ macro simd(forloop)
 end
 include("reduce.jl")
 
-## core structures
+# core structures
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
@@ -63,10 +70,28 @@ include("namedtuple.jl")
 # core docsystem
 include("docs/core.jl")
 
-# compiler
-include("codevalidation.jl")
-include("inference.jl")
-ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext)
+############
+# compiler #
+############
 
-end # baremodule Inference
+inlining_enabled() = (JLOptions().can_inline == 1)
+coverage_enabled() = (JLOptions().code_coverage != 0)
+
+const isleaftype = _isleaftype
+
+include("compiler/utilities.jl")
+include("compiler/validation.jl")
+
+include("compiler/typeutils.jl")
+include("compiler/typelimits.jl")
+include("compiler/typelattice.jl")
+include("compiler/tfuncs.jl")
+
+include("compiler/abstractinterpretation.jl")
+include("compiler/typeinfer.jl")
+include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+
+include("compiler/bootstrap.jl")
+
+end # baremodule Compiler
 ))
