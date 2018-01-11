@@ -819,7 +819,7 @@ function require(into::Module, mod::Symbol)
 end
 
 const loaded_modules = Dict{PkgId,Module}()
-const module_keys = Dict{Module,PkgId}()
+const module_keys = ObjectIdDict() # the reverse
 
 function register_root_module(key::PkgId, m::Module)
     if haskey(loaded_modules, key)
