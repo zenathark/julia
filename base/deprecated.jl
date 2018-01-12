@@ -2785,6 +2785,13 @@ end
 
 @deprecate findin(a, b) find(occursin(b), a)
 
+# issue #9053
+
+if Sys.iswindows()
+function Filesystem.tempname(uunique::UInt32)
+    error("`tempname(::UInt32)` is discontinued.")
+end
+end
 
 # END 0.7 deprecations
 
