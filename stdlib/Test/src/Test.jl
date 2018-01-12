@@ -1471,8 +1471,7 @@ end
 for (G, A) in ((GenericSet, AbstractSet),
                (GenericDict, AbstractDict))
     @eval begin
-        Base.done(s::$G, state) = done(s.s, state)
-        Base.next(s::$G, state) = next(s.s, state)
+        Base.iterate(s::$G, state...) = iterate(s.s, state...)
     end
     for f in (:eltype, :isempty, :length, :start)
         @eval begin

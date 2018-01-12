@@ -413,17 +413,16 @@ function _unique!(A::AbstractVector)
     seen = Set{eltype(A)}()
     idxs = eachindex(A)
     y = iterate(idxs)
-    y == nothing && return A
-    i, _ = y
+    count = 0
     for x in A
         if x ∉ seen
             push!(seen, x)
-            i, _ = y
-            A[i] = x
+            count += 1
+            A[y[1]] = x
             y = iterate(idxs, y[2])
         end
     end
-    resize!(A, i - first(idxs) + 1)
+    resize!(A, count)
 end
 
 # If A is grouped, so that each unique element is in a contiguous group, then we only
@@ -434,15 +433,17 @@ function _groupedunique!(A::AbstractVector)
     isempty(A) && return A
     idxs = eachindex(A)
     y = first(A)
-    state = start(idxs)
-    i, state = next(idxs, state)
-    for x in A
+    # We always keep the first element
+    it = iterate(idxs, iterate(idxs)[2])
+    count = 1
+    for x in Iterators.drop(A, 1)
         if !isequal(x, y)
-            i, state = next(idxs, state)
-            y = A[i] = x
+            y = A[it[1]] = x
+            count += 1
+            it = iterate(idxs, it[2])
         end
     end
-    resize!(A, i - first(idxs) + 1)
+    resize!(A, count)
 end
 
 """
