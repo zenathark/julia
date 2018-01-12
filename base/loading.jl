@@ -630,7 +630,7 @@ function _require_from_serialized(path::String)
                 depmods[i] = M
             end
         else
-            modpath = find_package(string(modkey))
+            modpath = locate_package(modkey::PkgId)
             modpath === nothing && return ErrorException("Required dependency $modkey not found in current path.")
             mod = _require_search_from_serialized(modkey, String(modpath))
             if !isa(mod, Bool)
@@ -1093,8 +1093,6 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
     end
     return io
 end
-
-compilecache(mod::Symbol) = compilecache(string(mod))
 
 """
     Base.compilecache(module::String)
