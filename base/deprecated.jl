@@ -2772,6 +2772,8 @@ end
 
 @deprecate findin(a, b) find(occursin(b), a)
 
+@deprecate findn(x::AbstractArray) (I = find(!iszero, x); (getindex.(I, 1), getindex.(I, 2)))
+
 
 # END 0.7 deprecations
 
