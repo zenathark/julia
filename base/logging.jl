@@ -499,22 +499,22 @@ function handle_message(logger::SimpleLogger, level, message, _module, group, id
     iob = IOContext(buf, logger.stream)
     msglines = split(chomp(string(message)), '\n')
     if length(msglines) + length(kwargs) == 1
-        print_with_color(color, iob, "[ ", levelstr, ": ", bold=true)
+        printstyled(iob, "[ ", levelstr, ": ", bold=true, color=color)
         print(iob, msglines[1], " ")
     else
-        print_with_color(color, iob, "┌ ", levelstr, ": ", bold=true)
+        printstyled(iob, "┌ ", levelstr, ": ", bold=true, color=color)
         println(iob, msglines[1])
         for i in 2:length(msglines)
-            print_with_color(color, iob, "│ ", bold=true)
+            printstyled(iob, "│ ", bold=true, color=color)
             println(iob, msglines[i])
         end
         for (key,val) in pairs(kwargs)
-            print_with_color(color, iob, "│ ", bold=true)
+            printstyled(iob, "│ ", bold=true, color=color)
             println(iob, "  ", key, " = ", val)
         end
-        print_with_color(color, iob, "└ ", bold=true)
+        printstyled(iob, "└ ", bold=true, color=color)
     end
-    print_with_color(:light_black, iob, "@ ", _module, " ", basename(filepath), ":", line, "\n")
+    printstyled(iob, "@ ", _module, " ", basename(filepath), ":", line, "\n", color=:light_black)
     write(logger.stream, take!(buf))
     nothing
 end

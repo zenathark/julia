@@ -2671,8 +2671,8 @@ function info(io::IO, msg...; prefix="INFO: ")
     depwarn("`info()` is deprecated, use `@info` instead.", :info)
     buf = IOBuffer()
     iob = redirect(IOContext(buf, io), log_info_to, :info)
-    print_with_color(info_color(), iob, prefix; bold = true)
-    println_with_color(info_color(), iob, chomp(string(msg...)))
+    printstyled(iob, prefix; bold=true, color=info_color())
+    printstyled(iob, chomp(string(msg...)), '\n', color=info_color())
     print(io, String(take!(buf)))
     return
 end
@@ -2709,8 +2709,8 @@ function warn(io::IO, msg...;
     end
     buf = IOBuffer()
     iob = redirect(IOContext(buf, io), log_warn_to, :warn)
-    print_with_color(warn_color(), iob, prefix; bold = true)
-    print_with_color(warn_color(), iob, str)
+    printstyled(iob, prefix; bold=true, color=warn_color())
+    printstyled(iob, str, color=warn_color())
     if bt !== nothing
         show_backtrace(iob, bt)
     end
@@ -2972,6 +2972,7 @@ end
 
 @deprecate findin(a, b) find(occursin(b), a)
 
+@deprecate print_with_color(color, args...; kwargs...) printstyled(args...; kwargs..., color=color)
 
 # END 0.7 deprecations
 

@@ -32,7 +32,7 @@ end
 
 function term(io::IO, md::Admonition, columns)
     print(io, " "^margin, "| ")
-    print_with_color(:bold, io, isempty(md.title) ? md.category : md.title)
+    printstyled(io, isempty(md.title) ? md.category : md.title, color=:bold)
     println(io, "\n", " "^margin, "|")
     s = sprint(term, md.content, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
@@ -42,7 +42,7 @@ end
 
 function term(io::IO, f::Footnote, columns)
     print(io, " "^margin, "| ")
-    print_with_color(:bold, io, "[^$(f.id)]")
+    printstyled(io, "[^$(f.id)]", color=:bold)
     println(io, "\n", " "^margin, "|")
     s = sprint(term, f.text, columns - 10; context=io)
     for line in split(rstrip(s), "\n")
@@ -142,7 +142,7 @@ function terminline(io::IO, md::Link)
 end
 
 function terminline(io::IO, code::Code)
-    print_with_color(:cyan, io, code.code)
+    printstyled(io, code.code, color=:cyan)
 end
 
 terminline(io::IO, x) = show(io, MIME"text/plain"(), x)
