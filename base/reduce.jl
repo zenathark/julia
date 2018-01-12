@@ -70,7 +70,7 @@ function mapfoldl(f, op, itr)
         return Base.mapreduce_empty_iter(f, op, itr, IteratorEltype(itr))
     end
     (x, i) = y
-    v0 = f(x)
+    v0 = mapreduce_first(f, op, x)
     mapfoldl_impl(f, op, v0, itr, i)
 end
 
