@@ -93,7 +93,6 @@ mul1!(X::StridedMatrix{T}, adjQ::Adjoint{<:Any,<:HessenbergQ{T}}) where {T<:Blas
 
 function (*)(Q::HessenbergQ{T}, X::StridedVecOrMat{S}) where {T,S}
     TT = typeof(zero(T)*zero(S) + zero(T)*zero(S))
-
     return mul2!(Q, copy_oftype(X, TT))
 end
 function (*)(X::StridedVecOrMat{S}, Q::HessenbergQ{T}) where {T,S}
