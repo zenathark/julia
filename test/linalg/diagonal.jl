@@ -350,10 +350,10 @@ end
 let D1 = Diagonal(rand(5)), D2 = Diagonal(rand(5))
     @test LinAlg.mul1!(copy(D1),D2) == D1*D2
     @test LinAlg.mul2!(D1,copy(D2)) == D1*D2
-    @test LinAlg.mul1!(copy(D1),D2) == D1*D2
-    @test LinAlg.mul2!(D1,copy(D2)) == D1*D2
-    @test LinAlg.mul1!(copy(D1),D2) == D1*D2
-    @test LinAlg.mul2!(D1,copy(D2)) == D1*D2
+    @test LinAlg.mul1!(copy(D1),transpose(D2)) == D1*transpose(D2)
+    @test LinAlg.mul2!(transpose(D1),copy(D2)) == transpose(D1)*D2
+    @test LinAlg.mul1!(copy(D1),adjoint(D2)) == D1*adjoint(D2)
+    @test LinAlg.mul2!(adjoint(D1),copy(D2)) == adjoint(D1)*D2
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin

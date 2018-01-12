@@ -494,7 +494,6 @@ end
 let n = 5
     A = rand(Float16, n, n)
     B = rand(Float16, n-1, n-1)
-
     @test_throws DimensionMismatch rdiv!(A, LowerTriangular(B))
     @test_throws DimensionMismatch rdiv!(A, UpperTriangular(B))
     @test_throws DimensionMismatch rdiv!(A, UnitLowerTriangular(B))
