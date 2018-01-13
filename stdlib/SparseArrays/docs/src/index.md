@@ -127,7 +127,7 @@ julia> findn(S)
 julia> findnz(R)
 ([1, 3, 4, 5], [1, -5, 2, 3])
 
-julia> find(!iszero, R)
+julia> findall(!iszero, R)
 4-element Array{Int64,1}:
  1
  3

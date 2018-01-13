@@ -367,11 +367,12 @@ This section lists changes that do not have deprecation warnings.
   * `findn(x::AbstractVector)` now returns a 1-tuple with the vector of indices, to be
     consistent with higher order arrays ([#25365]).
 
-  * `find` now returns the same type of indices as `keys`/`pairs` for `AbstractArray`,
-    `AbstractDict`, `AbstractString`, `Tuple` and `NamedTuple` objects ([#24774]).
+  * `find` has been renamed to `findall`, and now returns the same type of indices
+    as `keys`/`pairs` for `AbstractArray`, `AbstractDict`, `AbstractString`, `Tuple`
+    and `NamedTuple` objects ([#24774], [#25545]).
     In particular, this means that it returns `CartesianIndex` objects for matrices
     and higher-dimensional arrays instead of linear indices as was previously the case.
-    Use `Int[LinearIndices(size(a))[i] for i in find(f, a)]` to compute linear indices.
+    Use `Int[LinearIndices(size(a))[i] for i in findall(f, a)]` to compute linear indices.
 
  * `AbstractSet` objects are now considered equal by `==` and `isequal` if all of their
     elements are equal ([#25368]). This has required changing the hashing algorithm
@@ -935,7 +936,7 @@ Deprecated or removed
     `similar(::Associative, ::Pair{K, V})` has been deprecated in favour of
     `empty(::Associative, K, V)` ([#24390]).
 
-  * `findin(a, b)` has been deprecated in favor of `find(occursin(b), a)` ([#24673]).
+  * `findin(a, b)` has been deprecated in favor of `findall(occursin(b), a)` ([#24673]).
 
   * The generic implementations of `strides(::AbstractArray)` and `stride(::AbstractArray, ::Int)`
      have been deprecated. Subtypes of `AbstractArray` that implement the newly introduced strided
@@ -1191,3 +1192,4 @@ Command-line option changes
 [#25231]: https://github.com/JuliaLang/julia/issues/25231
 [#25365]: https://github.com/JuliaLang/julia/issues/25365
 [#25424]: https://github.com/JuliaLang/julia/issues/25424
+[#25545]: https://github.com/JuliaLang/julia/issues/25545

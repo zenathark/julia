@@ -1195,7 +1195,7 @@ end
 # (2) base/linalg/qr.jl
 # (3) base/linalg/lq.jl
 
-@deprecate find(x::Number)            find(!iszero, x)
+@deprecate find(x::Number)            findall(!iszero, x)
 @deprecate findnext(A, v, i::Integer) findnext(equalto(v), A, i)
 @deprecate findfirst(A, v)            findfirst(equalto(v), A)
 @deprecate findprev(A, v, i::Integer) findprev(equalto(v), A, i)
@@ -2770,7 +2770,9 @@ end
 
 @deprecate ismatch(r::Regex, s::AbstractString) contains(s, r)
 
-@deprecate findin(a, b) find(occursin(b), a)
+@deprecate findin(a, b) findall(occursin(b), a)
+
+@deprecate find findall
 
 
 # END 0.7 deprecations

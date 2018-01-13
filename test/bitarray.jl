@@ -233,7 +233,7 @@ timesofar("constructors")
             @check_bit_operation getindex(b1, m1) BitVector
         end
 
-        t1 = find(bitrand(l))
+        t1 = findall(bitrand(l))
         @check_bit_operation getindex(b1, t1)        BitVector
 
         for j = 1:l
@@ -271,7 +271,7 @@ timesofar("constructors")
         y = rand(0.0:1.0)
         @check_bit_operation setindex!(b1, y, 1:100) T
 
-        t1 = find(bitrand(l))
+        t1 = findall(bitrand(l))
         x = rand(Bool)
         @check_bit_operation setindex!(b1, x, t1) T
         b2 = bitrand(length(t1))
@@ -1089,7 +1089,7 @@ timesofar("datamove")
         @check_bit_operation findfirst(x->true, b1)  Int
         @check_bit_operation findfirst(x->false, b1) Int
 
-        @check_bit_operation find(b1) Vector{Int}
+        @check_bit_operation findall(b1) Vector{Int}
     end
 
     b1 = trues(v1)

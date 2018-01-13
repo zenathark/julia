@@ -366,10 +366,10 @@ I,J,N = findnz(z)
 @test I == [-1]
 @test J == [0]
 @test N == [2]
-@test find(!iszero,h) == [-2:1;]
-@test find(x->x>0, h) == [-1,1]
-@test find(x->x<0, h) == [-2,0]
-@test find(x->x==0, h) == [2]
+@test findall(!iszero,h) == [-2:1;]
+@test findall(x->x>0, h) == [-1,1]
+@test findall(x->x<0, h) == [-2,0]
+@test findall(x->x==0, h) == [2]
 @test mean(A_3_3) == median(A_3_3) == 5
 @test mean(x->2x, A_3_3) == 10
 @test mean(A_3_3, 1) == median(A_3_3, 1) == OffsetArray([2 5 8], (0,A_3_3.offsets[2]))
