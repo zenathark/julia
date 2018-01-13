@@ -349,7 +349,26 @@ struct UUID
     value::UInt128
 
     UUID(u::UInt128) = new(u)
+    UUID(u::NTuple{2, UInt64}) = UUID((UInt128(u[1]) << 64) | UInt128(u[2]))
+    UUID(u::NTuple{4, UInt32}) = UUID((UInt128(u[1]) << 96) | (UInt128(u[2]) << 64) | (UInt128(u[3]) << 32) | UInt128(u[4]))
 end
+
+function Base.convert(::Type{NTuple{2, UInt64}}, uuid::UUID)
+    uuid = uuid.value
+    hi = UInt64((uuid >> 64) & 0xffffffffffffffff)
+    lo = UInt64(uuid & 0xffffffffffffffff)
+    return (hi, lo)
+end
+
+function Base.convert(::Type{NTuple{4, UInt32}}, uuid::UUID)
+    uuid = uuid.value
+    hh = UInt32((uuid >> 96) & 0xffffffff)
+    hl = UInt32((uuid >> 64) & 0xffffffff)
+    lh = UInt32((uuid >> 32) & 0xffffffff)
+    ll = UInt32(uuid & 0xffffffff)
+    return (hh, hl, lh, ll)
+end
+
 
 """
     uuid1([rng::AbstractRNG=GLOBAL_RNG]) -> UUID

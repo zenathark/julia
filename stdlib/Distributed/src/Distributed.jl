@@ -68,13 +68,13 @@ export
 # Used only by shared arrays.
     check_same_host
 
-function _require_callback(mod::Symbol)
+function _require_callback(mod::Base.PkgId)
     if Base.toplevel_load[] && myid() == 1 && nprocs() > 1
         # broadcast top-level (e.g. from Main) import/using from node 1 (only)
         @sync for p in procs()
             p == 1 && continue
             @async remotecall_wait(p) do
-                Base.require(Main, mod)
+                Base._require(mod)
                 nothing
             end
         end

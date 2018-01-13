@@ -194,17 +194,19 @@ load_path() = filter(env -> env ≠ nothing, map(find_env, LOAD_PATH))
 
 find_package(args...) = locate_package(identify_package(args...))
 
-const uuid_sym = Symbol("##uuid")
-
 struct PkgId
     uuid::Union{UUID,Nothing}
     name::String
+
+    PkgId(u::UUID, name::AbstractString) = new(UInt128(u) == 0 ? nothing : u, name)
+    PkgId(name::AbstractString) = new(nothing, name)
 end
-PkgId(name::AbstractString) = PkgId(nothing, name)
 
 function PkgId(m::Module)
-    uuid = isdefined(m, uuid_sym) ? getfield(m, uuid_sym) : nothing
-    PkgId(uuid, String(module_name(m)))
+    uuid = UUID(ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), m))
+    name = String(module_name(m))
+    UInt128(uuid) == 0 && return PkgId(name)
+    return PkgId(uuid, name)
 end
 
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
@@ -213,10 +215,28 @@ function hash(pkg::PkgId, h::UInt)
     h += 0xc9f248583a0ca36c % UInt
     h = hash(pkg.uuid, h)
     h = hash(pkg.name, h)
+    return h
 end
 
 show(io::IO, pkg::PkgId) =
     print(io, pkg.name, " [", pkg.uuid === nothing ? "top-level" : pkg.uuid, "]")
+
+function binpack(pkg::PkgId)
+    io = IOBuffer()
+    write(io, UInt8(0))
+    uuid = pkg.uuid
+    write(io, uuid === nothing ? UInt128(0) : UInt128(uuid))
+    write(io, pkg.name)
+    return String(take!(io))
+end
+
+function binunpack(s::String)
+    io = IOBuffer(s)
+    @assert read(io, UInt8) === 0x00
+    uuid = read(io, UInt128)
+    name = read(io, String)
+    return PkgId(UUID(uuid), name)
+end
 
 function identify_package(where::Module, name::String)::Union{Nothing,PkgId}
     identify_package(PkgId(where), name)
@@ -600,7 +620,7 @@ function _include_from_serialized(path::String, depmods::Vector{Any})
                 push!(Base.Docs.modules, M)
             end
             if module_parent(M) === M
-                register_root_module(PkgId(M), M)
+                register_root_module(M)
             end
         end
     end
@@ -626,16 +646,16 @@ function _require_from_serialized(path::String)
         modkey, build_id = depmodnames[i]
         if root_module_exists(modkey)
             M = root_module(modkey)
-            if module_name(M) === modkey && module_build_id(M) === build_id
+            if module_build_id(M) === build_id
                 depmods[i] = M
             end
         else
             modpath = locate_package(modkey::PkgId)
-            modpath === nothing && return ErrorException("Required dependency $modkey not found in current path.")
+            modpath === nothing && return ErrorException("Required dependency $(modkey.name) not found in current path.")
             mod = _require_search_from_serialized(modkey, String(modpath))
             if !isa(mod, Bool)
                 for M in mod::Vector{Any}
-                    if module_name(M) === modkey && module_build_id(M) === build_id
+                    if PkgId(M) == modkey && module_build_id(M) === build_id
                         depmods[i] = M
                         break
                     end
@@ -662,6 +682,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             continue
         end
         # finish loading module graph into deps
+        fail = false
         for i in 1:length(deps)
             dep = deps[i]
             dep isa Module && continue
@@ -669,7 +690,7 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             reqmod = _require_search_from_serialized(modkey, modpath)
             if !isa(reqmod, Bool)
                 for M in reqmod::Vector{Any}
-                    if PkgId(M) === modkey && module_build_id(M) === build_id
+                    if PkgId(M) == modkey && module_build_id(M) === build_id
                         deps[i] = M
                         break
                     end
@@ -680,9 +701,11 @@ function _require_search_from_serialized(pkg::PkgId, sourcepath::String)
             end
             if !isa(deps[i], Module)
                 @debug "Required dependency $modkey failed to load from cache file for $modpath."
-                continue
+                fail = true
+                break
             end
         end
+        fail && continue
         restored = _include_from_serialized(path_to_try, deps)
         if isa(restored, Exception)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
@@ -697,7 +720,7 @@ end
 const package_locks = Dict{PkgId,Condition}()
 
 # to notify downstream consumers that a module was successfully loaded
-# Callbacks take the form (mod::Symbol) -> nothing.
+# Callbacks take the form (mod::Base.PkgId) -> nothing.
 # WARNING: This is an experimental feature and might change later, without deprecation.
 const package_callbacks = Any[]
 # to notify downstream consumers that a file has been included into a particular module
@@ -717,7 +740,7 @@ function _include_dependency(mod::Module, _path::AbstractString)
         path = joinpath(dirname(prev), _path)
     end
     if _track_dependencies[]
-        push!(_require_dependencies, (PkgId(mod), normpath(path), mtime(path)))
+        push!(_require_dependencies, (mod, normpath(path), mtime(path)))
     end
     return path, prev
 end
@@ -806,13 +829,13 @@ function require(into::Module, mod::Symbol)
     uuidkey === nothing &&
         throw(ArgumentError("Module $mod not found in current path.\nRun `Pkg.add(\"$mod\")` to install the $mod package."))
     if _track_dependencies[]
-        push!(_require_dependencies, (into, uuidkey, 0.0))
+        push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
     if !root_module_exists(uuidkey)
         _require(uuidkey)
         # After successfully loading, notify downstream consumers
         for callback in package_callbacks
-            invokelatest(callback, mod)
+            invokelatest(callback, uuidkey)
         end
     end
     return root_module(uuidkey)
@@ -821,12 +844,12 @@ end
 const loaded_modules = Dict{PkgId,Module}()
 const module_keys = ObjectIdDict() # the reverse
 
-function register_root_module(key::PkgId, m::Module)
+function register_root_module(m::Module)
+    key = PkgId(m)
     if haskey(loaded_modules, key)
         oldm = loaded_modules[key]
         if oldm !== m
-            name = module_name(oldm)
-            @warn "Replacing module `$name`"
+            @warn "Replacing module `$(key.name)`"
         end
     end
     loaded_modules[key] = m
@@ -834,13 +857,9 @@ function register_root_module(key::PkgId, m::Module)
     nothing
 end
 
-function register_root_module(uuid::Union{Nothing,UUID}, name::Symbol, m::Module)
-    register_root_module(PkgId(uuid, String(name)), m)
-end
-
-register_root_module(PkgId("Core"), Core)
-register_root_module(PkgId("Base"), Base)
-register_root_module(PkgId("Main"), Main)
+register_root_module(Core)
+register_root_module(Base)
+register_root_module(Main)
 
 is_root_module(m::Module) = haskey(module_keys, m)
 root_module_key(m::Module) = module_keys[m]
@@ -853,7 +872,6 @@ using Base
 end
 
 # get a top-level Module from the given key
-# for now keys can only be Symbols, but that will change
 root_module(key::PkgId) = loaded_modules[key]
 root_module(where::Module, name::Symbol) =
     root_module(identify_package(where, String(name)))
@@ -926,10 +944,19 @@ function _require(pkg::PkgId)
 
         # just load the file normally via include
         # for unknown dependencies
+        uuid = pkg.uuid
+        uuid = (uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, uuid))
+        old_uuid = ccall(:jl_module_uuid, NTuple{2, UInt64}, (Any,), __toplevel__)
+        if uuid !== old_uuid
+            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, uuid)
+        end
         try
-            Base.include_relative(__toplevel__, path, pkg.uuid)
+            include_relative(__toplevel__, path)
             return
         catch ex
+            if uuid !== old_uuid
+                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
+            end
             if doneprecompile === true || JLOptions().use_compiled_modules == 0 || !precompilableerror(ex, true)
                 rethrow() # rethrow non-precompilable=true errors
             end
@@ -942,6 +969,9 @@ function _require(pkg::PkgId)
                 # TODO: disable __precompile__(true) error and do normal include instead of error
                 error("Module $name declares __precompile__(true) but require failed to create a usable precompiled cache file.")
             end
+        end
+        if uuid !== old_uuid
+            ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), __toplevel__, old_uuid)
         end
     finally
         toplevel_load[] = last
@@ -984,23 +1014,18 @@ function source_dir()
     p === nothing ? pwd() : dirname(p)
 end
 
-include_relative(mod::Module, path::AbstractString, uuid::Union{Nothing,UUID}=nothing) = include_relative(mod, String(path), uuid)
-function include_relative(mod::Module, _path::String, uuid::Union{Nothing,UUID}=nothing)
+include_relative(mod::Module, path::AbstractString) = include_relative(mod, String(path))
+function include_relative(mod::Module, _path::String)
     path, prev = _include_dependency(mod, _path)
     for callback in include_callbacks # to preserve order, must come before Core.include
         invokelatest(callback, mod, path)
     end
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
-    old_uuid = isdefined(__toplevel__, uuid_sym) ? getfield(__toplevel__, uuid_sym) : nothing
-    uuid !== old_uuid &&
-        ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, uuid_sym, uuid)
     local result
     try
         result = Core.include(mod, path)
     finally
-        uuid !== old_uuid &&
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), __toplevel__, uuid_sym, old_uuid)
         if prev === nothing
             delete!(tls, :SOURCE_PATH)
         else
@@ -1038,6 +1063,7 @@ function evalfile(path::AbstractString, args::Vector{String}=String[])
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, String[args...])
 
+
 function create_expr_cache(input::String, output::String, concrete_deps::typeof(_concrete_dependencies), uuid::Union{Nothing,UUID})
     rm(output, force=true)   # Remove file if it exists
     code_object = """
@@ -1066,25 +1092,29 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
                   append!(Base._concrete_dependencies, $concrete_deps)
                   Base._track_dependencies[] = true
                   end)
-        uuid !== nothing && serialize(in, quote
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any),
-                  Base.__toplevel__, $(Meta.quot(uuid_sym)), $uuid)
-            end)
+        if uuid !== nothing
+            let uuid = convert(NTuple{2, UInt64}, uuid)
+                serialize(in, quote
+                    ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, $uuid)
+                end)
+            end
+        end
         source = source_path(nothing)
         if source !== nothing
             serialize(in, quote
-                      task_local_storage()[:SOURCE_PATH] = $(source)
-                      end)
+                task_local_storage()[:SOURCE_PATH] = $(source)
+            end)
         end
         serialize(in, :(Base.include(Base.__toplevel__, $(abspath(input)))))
         # TODO: cleanup is probably unnecessary here
         if source !== nothing
             serialize(in, :(delete!(task_local_storage(), :SOURCE_PATH)))
         end
-        uuid !== nothing && serialize(in, quote
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any),
-                  Base.__toplevel__, $(Meta.quot(uuid_sym)), nothing)
+        if uuid !== nothing
+            serialize(in, quote
+                ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, (0, 0))
             end)
+        end
         close(in)
     catch ex
         close(in)
@@ -1095,7 +1125,7 @@ function create_expr_cache(input::String, output::String, concrete_deps::typeof(
 end
 
 """
-    Base.compilecache(module::String)
+    Base.compilecache(module::PkgId)
 
 Creates a precompiled cache file for
 a module and all of its dependencies.
@@ -1110,13 +1140,12 @@ function compilecache(pkg::PkgId)
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$name not found in path"))
     # decide where to put the resulting cache file
-    cachepath = LOAD_CACHE_PATH[1]
+    cachepath = abspath(LOAD_CACHE_PATH[1])
+    pkg.uuid !== nothing && (cachepath = joinpath(cachepath, slug(pkg.uuid)))
     if !isdir(cachepath)
         mkpath(cachepath)
     end
-    suffix = "$(pkg.name).ji"
-    pkg.uuid !== nothing && (suffix = joinpath(slug(pkg.uuid), suffix))
-    cachefile::String = abspath(cachepath, suffix)
+    cachefile::String = joinpath(cachepath, "$(pkg.name).ji")
     # build up the list of modules that we want the precompile process to preserve
     concrete_deps = copy(_concrete_dependencies)
     for (key, mod) in loaded_modules
@@ -1148,39 +1177,40 @@ isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (P
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == ntoh(read(f, UInt32)))
 
 function parse_cache_header(f::IO)
-    modules = Vector{Pair{Symbol, UInt64}}()
+    modules = Vector{Pair{PkgId, UInt64}}()
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        uuid = ntoh(read(f, UInt64)) # module UUID (mostly just a timestamp)
-        push!(modules, sym => uuid)
+        sym = String(read(f, n)) # module name
+        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
+        build_id = ntoh(read(f, UInt64)) # build UUID (mostly just a timestamp)
+        push!(modules, PkgId(uuid, sym) => build_id)
     end
     totbytes = ntoh(read(f, Int64)) # total bytes for file dependencies
     # read the list of requirements
     # and split the list into include and requires statements
-    includes = Tuple{String, String, Float64}[]
-    requires = Pair{String, String}[]
+    includes = Tuple{PkgId, String, Float64}[]
+    requires = Pair{PkgId, PkgId}[]
     while true
         n2 = ntoh(read(f, Int32))
         n2 == 0 && break
         depname = String(read(f, n2))
         mtime = ntoh(read(f, Float64))
         n1 = ntoh(read(f, Int32))
-        if n1 == 0
-            modkey = "Main" # remap anything loaded outside this cache files modules to have occurred in `Main`
-        else
-            modkey = String(modules[n1][1])
+        # map ids to keys
+        modkey = (n1 == 0) ? PkgId("") : modules[n1].first
+        if n1 != 0
+            # consume (and ignore) the module path too
             while true
                 n1 = ntoh(read(f, Int32))
                 totbytes -= 4
                 n1 == 0 && break
-                modkey = string(modkey, ".", String(read(f, n1)))
+                skip(f, n1) # String(read(f, n1))
                 totbytes -= n1
             end
         end
         if depname[1] == '\0'
-            push!(requires, modkey => depname[2:end])
+            push!(requires, modkey => binunpack(depname))
         else
             push!(includes, (modkey, depname, mtime))
         end
@@ -1189,13 +1219,14 @@ function parse_cache_header(f::IO)
     @assert totbytes == 12 "header of cache file appears to be corrupt"
     srctextpos = ntoh(read(f, Int64))
     # read the list of modules that are required to be present during loading
-    required_modules = Vector{Pair{Symbol, UInt64}}()
+    required_modules = Vector{Pair{PkgId, UInt64}}()
     while true
         n = ntoh(read(f, Int32))
         n == 0 && break
-        sym = Symbol(read(f, n)) # module symbol
-        uuid = ntoh(read(f, UInt64)) # module UUID
-        push!(required_modules, sym => uuid)
+        sym = String(read(f, n)) # module name
+        uuid = UUID((ntoh(read(f, UInt64)), ntoh(read(f, UInt64)))) # pkg UUID
+        build_id = ntoh(read(f, UInt64)) # build id
+        push!(required_modules, PkgId(uuid, sym) => build_id)
     end
     return modules, (includes, requires), required_modules, srctextpos
 end
@@ -1266,7 +1297,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             return true # invalid cache file
         end
         (modules, (includes, requires), required_modules) = parse_cache_header(io)
-        modules = Dict{Symbol, UInt64}(modules)
+        modules = Dict{PkgId, UInt64}(modules)
 
         # Check if transitive dependencies can be fullfilled
         ndeps = length(required_modules)
@@ -1276,7 +1307,7 @@ function stale_cachefile(modpath::String, cachefile::String)
             # Module is already loaded
             if root_module_exists(req_key)
                 M = root_module(req_key)
-                if PkgId(M) === req_key && module_build_id(M) === req_build_id
+                if PkgId(M) == req_key && module_build_id(M) === req_build_id
                     depmods[i] = M
                 else
                     @debug "Rejecting cache file $cachefile because module $req_key is already loaded and incompatible."
@@ -1315,19 +1346,11 @@ function stale_cachefile(modpath::String, cachefile::String)
                 return true # cache file was compiled from a different path
             end
             for (modkey, req_modkey) in requires
-                # TODO: verify `require(modkey, name(req_modkey))` ==> `req_modkey`
-            end
-            for (_, f, ftime_req) in includes
-                # Issue #13606: compensate for Docker images rounding mtimes
-                # Issue #20837: compensate for GlusterFS truncating mtimes to microseconds
-                ftime = mtime(f)
-                if ftime != ftime_req && ftime != floor(ftime_req) && ftime != trunc(ftime_req, 6)
-                    @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
+                # verify that `require(modkey, name(req_modkey))` ==> `req_modkey`
+                if identify_package(modkey, req_modkey.name) != req_modkey
+                    @debug "Rejecting cache file $cachefile because uuid mapping for $modkey => $req_modkey has changed"
                     return true
                 end
-            end
-            for (modkey, req_modkey) in requires
-                # TODO: verify `require(modkey, name(req_modkey))` ==> `req_modkey`
             end
             for (_, f, ftime_req) in includes
                 # Issue #13606: compensate for Docker images rounding mtimes

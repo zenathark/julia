@@ -428,6 +428,8 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
         }
     }
     write_uint8(s->s, m->istopmod);
+    write_uint64(s->s, m->uuid.hi);
+    write_uint64(s->s, m->uuid.lo);
     write_uint64(s->s, m->build_id);
     write_int32(s->s, m->counter);
 }
@@ -1027,10 +1029,12 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(a, i);
         assert(jl_is_module(m));
         if (!module_in_worklist(m)) {
-            const char *modkey = jl_symbol_name(m->name);
-            size_t l = strlen(modkey);
+            const char *modname = jl_symbol_name(m->name);
+            size_t l = strlen(modname);
             write_int32(s, l);
-            ios_write(s, modkey, l);
+            ios_write(s, modname, l);
+            write_uint64(s, m->uuid.hi);
+            write_uint64(s, m->uuid.lo);
             write_uint64(s, m->build_id);
         }
     }
@@ -1065,6 +1069,8 @@ static void write_work_list(ios_t *s)
             size_t l = strlen(jl_symbol_name(workmod->name));
             write_int32(s, l);
             ios_write(s, jl_symbol_name(workmod->name), l);
+            write_uint64(s, workmod->uuid.hi);
+            write_uint64(s, workmod->uuid.lo);
             write_uint64(s, workmod->build_id);
         }
     }
@@ -1601,6 +1607,8 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s)
         i++;
     }
     m->istopmod = read_uint8(s->s);
+    m->uuid.hi = read_uint64(s->s);
+    m->uuid.lo = read_uint64(s->s);
     m->build_id = read_uint64(s->s);
     m->primary_world = jl_world_counter;
     m->counter = read_int32(s->s);
@@ -1962,10 +1970,13 @@ static jl_value_t *read_verify_mod_list(ios_t *s, arraylist_t *dependent_worlds,
         char *name = (char*)alloca(len + 1);
         ios_read(s, name, len);
         name[len] = '\0';
-        uint64_t uuid = read_uint64(s);
+        jl_uuid_t uuid;
+        uuid.hi = read_uint64(s);
+        uuid.lo = read_uint64(s);
+        uint64_t build_id = read_uint64(s);
         jl_sym_t *sym = jl_symbol_n(name, len);
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
-        if (!m || !jl_is_module(m) || m->name != sym || m->build_id != uuid) {
+        if (!m || !jl_is_module(m) || m->uuid.hi != uuid.hi || m->uuid.lo != uuid.lo || m->name != sym || m->build_id != build_id) {
             return jl_get_exceptionf(jl_errorexception_type,
                 "Invalid input in module list: expected %s.", name);
         }
@@ -2691,7 +2702,7 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     { // skip past the mod list
         size_t len;
         while ((len = read_int32(f)))
-            ios_skip(f, len + sizeof(uint64_t));
+            ios_skip(f, len + 3 * sizeof(uint64_t));
     }
     { // skip past the dependency list
         size_t deplen = read_uint64(f);

@@ -840,10 +840,8 @@ function deserialize_module(s::AbstractSerializer)
             m = getfield(m, mkey[i])::Module
         end
     else
-        mkey :: Union{Nothing,UInt128}
-        uuid = mkey === nothing ? nothing : Base.Random.UUID(mkey)
-        name = deserialize(s)::Symbol
-        pkg = Base.PkgId(uuid, String(name))
+        name = String(deserialize(s)::Symbol)
+        pkg = (mkey === nothing) ? Base.PkgId(name) : Base.PkgId(Base.Random.UUID(mkey), name)
         m = Base.root_module(pkg)
         mname = deserialize(s)
         while mname !== ()
